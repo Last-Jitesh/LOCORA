@@ -1,0 +1,436 @@
+# Locora — Complete Implementation Plan
+**Tagline:** The Social Layer of Every Neighborhood
+**Stack:** MongoDB, Express.js, React (Vite + TypeScript), Node.js, Socket.io, Cloudinary, Mapbox/Google Maps
+
+---
+
+## 0. Project Setup & Repo Structure
+
+### 0.1 Monorepo layout
+```
+locora/
+├── client/                  # React + Vite + TS
+├── server/                  # Node + Express + TS
+├── .gitignore
+├── README.md
+```
+
+### 0.2 Server folder structure
+```
+server/
+├── src/
+│   ├── config/
+│   │   ├── db.ts
+│   │   ├── cloudinary.ts
+│   │   └── env.ts
+│   ├── models/
+│   │   ├── User.ts
+│   │   ├── Business.ts
+│   │   ├── Review.ts
+│   │   ├── Activity.ts
+│   │   ├── ActivityParticipant.ts
+│   │   ├── Group.ts
+│   │   ├── Post.ts
+│   │   ├── Event.ts
+│   │   ├── RSVP.ts
+│   │   ├── LostFound.ts
+│   │   ├── Notification.ts
+│   │   ├── Message.ts
+│   │   └── Badge.ts
+│   ├── controllers/
+│   ├── routes/
+│   ├── middleware/
+│   │   ├── auth.ts
+│   │   ├── roleCheck.ts
+│   │   ├── errorHandler.ts
+│   │   └── upload.ts
+│   ├── sockets/
+│   │   ├── index.ts
+│   │   ├── chatSocket.ts
+│   │   ├── activitySocket.ts
+│   │   └── presenceSocket.ts
+│   ├── utils/
+│   │   ├── geo.ts
+│   │   ├── reputation.ts
+│   │   └── apiResponse.ts
+│   ├── app.ts
+│   └── server.ts
+├── package.json
+└── tsconfig.json
+```
+
+### 0.3 Client folder structure
+```
+client/
+├── src/
+│   ├── api/                 # axios instances + endpoint functions
+│   ├── components/
+│   ├── pages/
+│   ├── hooks/
+│   │   ├── useAuth.ts
+│   │   ├── useSocket.ts
+│   │   ├── useGeolocation.ts
+│   │   └── useNotifications.ts
+│   ├── context/
+│   │   ├── AuthContext.tsx
+│   │   └── SocketContext.tsx
+│   ├── store/                # Zustand or Redux Toolkit
+│   ├── types/
+│   ├── utils/
+│   ├── App.tsx
+│   └── main.tsx
+├── public/
+│   ├── manifest.json
+│   └── service-worker.ts
+└── vite.config.ts
+```
+
+### 0.4 Core dependencies
+**Server:** express, mongoose, jsonwebtoken, bcryptjs, socket.io, cloudinary, multer, cors, dotenv, express-validator, express-rate-limit, cookie-parser
+
+**Client:** react, react-router-dom, axios, socket.io-client, zustand (or @reduxjs/toolkit), react-hook-form, zod, tailwindcss, react-query (@tanstack/react-query), mapbox-gl or @react-google-maps/api, vite-plugin-pwa
+
+---
+
+## 1. Database Schema Design
+
+### User
+```
+{
+  name, email, password (hashed), phone,
+  role: enum ['resident','business_owner','admin'],
+  location: { type: 'Point', coordinates: [lng, lat] },  // 2dsphere index
+  address, avatar (Cloudinary URL),
+  reputationScore: Number (default 0),
+  badges: [ObjectId -> Badge],
+  isVerified: Boolean,
+  societyCode: String (optional, for closed-community feature),
+  createdAt, updatedAt
+}
+```
+
+### Business
+```
+{
+  owner: ObjectId -> User,
+  name, category (enum: cafe, restaurant, medical, grocery, salon, other),
+  description,
+  location: { type: 'Point', coordinates: [lng, lat] },  // 2dsphere index
+  address,
+  images: [String] (Cloudinary URLs),
+  offers: [{ title, description, validTill }],
+  avgRating: Number,
+  reviewCount: Number,
+  isVerified: Boolean,
+  verificationDoc: String (Cloudinary URL),
+  openingHours: { open, close },
+  createdAt
+}
+```
+
+### Review
+```
+{
+  business: ObjectId -> Business,
+  user: ObjectId -> User,
+  rating: Number (1-5),
+  comment: String,
+  images: [String],
+  createdAt
+}
+```
+
+### Activity
+```
+{
+  organizer: ObjectId -> User,
+  type (enum: sport, gym, cycling, walking, study, gaming, other),
+  title, description,
+  location: { type: 'Point', coordinates: [lng, lat] },
+  scheduledTime: Date,
+  isRecurring: Boolean,
+  recurrenceRule: String (optional, e.g. "daily-6am"),
+  capacity: Number,
+  status: enum ['open', 'matched', 'closed'],   // <-- the toggle field
+  createdAt
+}
+```
+
+### ActivityParticipant
+```
+{
+  activity: ObjectId -> Activity,
+  user: ObjectId -> User,
+  status: enum ['interested','joined','left'],
+  joinedAt
+}
+```
+
+### Group (Neighborhood/Society)
+```
+{
+  name, description, societyCode (unique),
+  location: { type: 'Point', coordinates },
+  admins: [ObjectId -> User],
+  members: [ObjectId -> User],
+  createdAt
+}
+```
+
+### Post (announcements/discussions/service recommendations)
+```
+{
+  group: ObjectId -> Group,
+  author: ObjectId -> User,
+  type: enum ['announcement','discussion','recommendation'],
+  title, content, images: [String],
+  upvotes: [ObjectId -> User],
+  downvotes: [ObjectId -> User],
+  comments: [{ user, text, createdAt }],
+  createdAt
+}
+```
+
+### Event
+```
+{
+  group: ObjectId -> Group,
+  organizer: ObjectId -> User,
+  title, description, images: [String],
+  location: { type: 'Point', coordinates },
+  dateTime: Date,
+  createdAt
+}
+```
+
+### RSVP
+```
+{
+  event: ObjectId -> Event,
+  user: ObjectId -> User,
+  status: enum ['going','interested','not_going'],
+}
+```
+
+### LostFound
+```
+{
+  reportedBy: ObjectId -> User,
+  type: enum ['lost','found'],
+  title, description, images: [String],
+  location: { type: 'Point', coordinates },
+  category, status: enum ['open','resolved'],
+  createdAt
+}
+```
+
+### Notification
+```
+{
+  user: ObjectId -> User,
+  type: enum ['activity','business','group','event','system'],
+  message, link, isRead: Boolean,
+  createdAt
+}
+```
+
+### Message (chat)
+```
+{
+  activity: ObjectId -> Activity (or roomId),
+  sender: ObjectId -> User,
+  content, createdAt
+}
+```
+
+### Badge
+```
+{
+  name, description, icon, thresholdPoints: Number
+}
+```
+
+**Indexes:** `2dsphere` on all `location` fields. Compound index on `Activity.status + scheduledTime`. Text index on `Business.name` and `Post.title` for search.
+
+---
+
+## 2. Authentication & Authorization
+
+- JWT-based auth (access token + refresh token in httpOnly cookie), OR Clerk if you want faster setup — pick one, don't do both.
+- Middleware: `authMiddleware` (verifies token), `roleCheck(['business_owner'])` (restricts routes by role).
+- Roles: `resident`, `business_owner`, `admin`.
+- Registration flow captures location (via browser geolocation) and stores as GeoJSON Point.
+- Password hashing via bcrypt, rate-limited login route to prevent brute force.
+
+---
+
+## 3. REST API Route Map
+
+### Auth
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+
+### Users
+- `GET /api/users/:id`
+- `PATCH /api/users/:id`
+- `GET /api/users/:id/badges`
+
+### Business
+- `POST /api/business` (business_owner)
+- `GET /api/business?lat=&lng=&radius=&category=&sort=`
+- `GET /api/business/:id`
+- `PATCH /api/business/:id` (owner only)
+- `POST /api/business/:id/reviews`
+- `GET /api/business/:id/reviews`
+- `GET /api/business/:id/analytics` (owner only — views, review count, rating trend over time)
+- `PATCH /api/business/:id/verify` (admin)
+
+### Activities
+- `POST /api/activities`
+- `GET /api/activities?lat=&lng=&radius=&type=&status=open`
+- `GET /api/activities/:id`
+- `PATCH /api/activities/:id/status` (organizer toggles open/matched/closed)
+- `POST /api/activities/:id/join`
+- `POST /api/activities/:id/leave`
+- `GET /api/activities/:id/participants`
+
+### Groups
+- `POST /api/groups`
+- `POST /api/groups/join` (via societyCode)
+- `GET /api/groups/:id`
+- `GET /api/groups/:id/members`
+
+### Posts
+- `POST /api/posts`
+- `GET /api/posts?group=&type=`
+- `PATCH /api/posts/:id/vote`
+- `POST /api/posts/:id/comments`
+
+### Events
+- `POST /api/events`
+- `GET /api/events?group=`
+- `POST /api/events/:id/rsvp`
+- `GET /api/events/:id/rsvps`
+
+### Lost & Found
+- `POST /api/lostfound`
+- `GET /api/lostfound?lat=&lng=&radius=&type=&category=`
+- `PATCH /api/lostfound/:id/resolve`
+
+### Notifications
+- `GET /api/notifications`
+- `PATCH /api/notifications/:id/read`
+
+### Search (global)
+- `GET /api/search?q=&type=business|activity|post`
+
+---
+
+## 4. Socket.io Event Design
+
+**Namespaces/rooms:**
+- `activity:{activityId}` — chat + live participant updates + status toggle broadcast
+- `user:{userId}` — personal notification channel
+- `presence` — global online/offline tracking
+
+**Events:**
+| Event | Direction | Payload |
+|---|---|---|
+| `join_activity_room` | client→server | `{ activityId }` |
+| `activity_message` | client→server | `{ activityId, content }` |
+| `new_message` | server→client | `{ sender, content, timestamp }` |
+| `participant_joined` | server→client | `{ userId, name }` |
+| `participant_left` | server→client | `{ userId }` |
+| `activity_status_changed` | server→client | `{ activityId, status }` — fired when organizer toggles found/closed |
+| `typing` / `stop_typing` | both | `{ activityId, userId }` |
+| `user_online` / `user_offline` | server→client | `{ userId }` |
+| `new_notification` | server→client | `{ notification }` |
+
+---
+
+## 5. Geolocation & Maps
+
+- Browser Geolocation API on client to capture user's lat/lng on login/profile setup.
+- All "nearby" queries use MongoDB `$geoNear` or `$near` with `2dsphere` index, radius passed as query param (e.g., 5km default).
+- Mapbox GL JS (or Google Maps) to render business pins, activity pins, and event locations on a map view.
+- Reverse geocoding (Mapbox Geocoding API) to convert coordinates to readable address for display.
+
+---
+
+## 6. Image Uploads (Cloudinary)
+
+- `multer` + `multer-storage-cloudinary` on backend for direct-to-Cloudinary upload.
+- Separate upload presets/folders: `locora/businesses`, `locora/events`, `locora/lostfound`, `locora/avatars`.
+- Client-side image compression before upload (e.g., `browser-image-compression`) to keep payloads small.
+
+---
+
+## 7. Notifications & PWA
+
+- In-app notifications stored in `Notification` collection, pushed live via Socket.io `new_notification` event.
+- Web Push API + service worker for background push notifications (works even when app is closed) — requires VAPID keys.
+- PWA setup: `vite-plugin-pwa`, `manifest.json` (name, icons, theme color), service worker caching strategy (`NetworkFirst` for API calls, `CacheFirst` for static assets).
+- Installable on mobile home screen.
+
+---
+
+## 8. Reputation & Badge System (rule-based, no ML)
+
+Point rules (example):
+- +5 for a review that gets 3+ helpful votes
+- +10 for hosting a completed activity
+- +10 for hosting a completed event
+- +3 for a resolved lost & found post
+- +2 for joining an activity
+
+Badge tiers: Newcomer (0-20), Active Neighbor (21-75), Community Pillar (76-200), Local Legend (200+).
+Implement as a utility function `awardPoints(userId, points, reason)` called from relevant controllers, recalculates badge on threshold cross.
+
+---
+
+## 9. Build Phases (Recommended Order)
+
+### Phase 0 — Foundation (Days 1-2)
+- Repo setup, folder structure, env config, DB connection, base Express app, base Vite app, Tailwind setup, CORS, error-handling middleware.
+
+### Phase 1 — Auth & User System (Days 3-5)
+- Register/login/logout, JWT middleware, role-based access, profile page, geolocation capture on signup.
+
+### Phase 2 — Business Discovery (Days 6-10)
+- Business CRUD, image upload, geospatial search, reviews, ratings, search & filters, business owner dashboard, basic analytics.
+
+### Phase 3 — Activity Partners (Days 11-16) — **Flagship module**
+- Activity CRUD, geospatial matching query, join/leave flow, status toggle (open/matched/closed), Socket.io room setup, real-time chat, live participant updates, typing indicators, presence tracking.
+
+### Phase 4 — Community & Groups (Days 17-22)
+- Group creation/join via code, posts (announcements/discussions/recommendations), voting, comments, events + RSVP, lost & found board.
+
+### Phase 5 — Notifications, Reputation, PWA (Days 23-26)
+- Notification system + Socket push, reputation engine + badges, PWA manifest + service worker + Web Push.
+
+### Phase 6 — Polish & Deployment (Days 27-30)
+- Global search, admin moderation panel, responsive QA, loading/error states, deployment (Vercel for client, Render/Railway for server, MongoDB Atlas, Cloudinary), environment variable audit, final testing.
+
+---
+
+## 10. Deployment Checklist
+
+- **Frontend:** Vercel (auto-deploy from `client/`)
+- **Backend:** Render or Railway (auto-deploy from `server/`)
+- **Database:** MongoDB Atlas (whitelist IPs, connection string in env)
+- **Media:** Cloudinary (API key/secret in env, never client-side)
+- **Env vars needed:** `MONGO_URI`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`, `MAPBOX_TOKEN`, `CLIENT_URL`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+- CORS configured to allow only deployed client origin
+- Socket.io CORS configured separately, and sticky sessions enabled if using multiple server instances
+
+---
+
+## 11. Explicit Non-Goals (for scope control)
+
+- No AI/ML/NLP anywhere in the system — all ranking, matching, and moderation is rule-based (distance, time, rating, keyword filters).
+- No Redis — activity status is a simple enum field toggled by the organizer, broadcast via Socket.io. No booking/payment race conditions exist in this flow.
+- No payment integration in v1.
+- Image-similarity matching for Lost & Found is manual browse + filters, not embedding search.
