@@ -14,7 +14,8 @@ const transporter = nodemailer.createTransport({
   },
   connectionTimeout: 10000, // 10 seconds
   socketTimeout: 15000,     // 15 seconds
-});
+  family: 4,                // Force IPv4 to bypass Render's IPv6 ENETUNREACH error
+} as any);
 
 export const sendOtpEmail = async (email: string, otp: string): Promise<void> => {
   const mailOptions = {
