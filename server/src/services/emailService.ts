@@ -82,7 +82,8 @@ export const sendOtpEmail = async (email: string, otp: string): Promise<void> =>
     console.log(`✅ OTP email sent successfully to: ${email}`);
   } catch (err: any) {
     console.error('⚠️ SMTP email sending error:', err.message || err);
-    throw err; // throw so the background promise catch registers it
+    console.log(`🔑 [FAILSAFE DEV OTP] OTP for ${email} is: ${otp} (Copy this from Render logs to log in)`);
+    throw err;
   }
 };
 
