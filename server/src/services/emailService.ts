@@ -102,6 +102,64 @@ export const sendOtpEmail = async (email: string, otp: string): Promise<void> =>
       return;
     }
 
+    if (env.SENDGRID_API_KEY) {
+      console.log(`✉️ Attempting to send OTP email via SendGrid API to: ${email}`);
+      const fromEmail = env.EMAIL_FROM.includes('<')
+        ? env.EMAIL_FROM.split('<')[1].replace('>', '').trim()
+        : env.EMAIL_FROM || env.EMAIL_USER;
+
+      const res = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.SENDGRID_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email }] }],
+          from: { email: fromEmail, name: 'Locora' },
+          subject: mailOptions.subject,
+          content: [{ type: 'text/html', value: mailOptions.html }],
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`SendGrid API returned status ${res.status}: ${errText}`);
+      }
+
+      console.log(`✅ OTP email sent successfully via SendGrid API to: ${email}`);
+      return;
+    }
+
+    if (env.BREVO_API_KEY) {
+      console.log(`✉️ Attempting to send OTP email via Brevo API to: ${email}`);
+      const fromEmail = env.EMAIL_FROM.includes('<')
+        ? env.EMAIL_FROM.split('<')[1].replace('>', '').trim()
+        : env.EMAIL_FROM || env.EMAIL_USER;
+
+      const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': env.BREVO_API_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'Locora', email: fromEmail },
+          to: [{ email }],
+          subject: mailOptions.subject,
+          htmlContent: mailOptions.html,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Brevo API returned status ${res.status}: ${errText}`);
+      }
+
+      console.log(`✅ OTP email sent successfully via Brevo API to: ${email}`);
+      return;
+    }
+
     console.log(`✉️ Attempting to send OTP email via SMTP to: ${email}`);
     await transporter.sendMail(mailOptions);
     console.log(`✅ OTP email sent successfully via SMTP to: ${email}`);
