@@ -77,11 +77,36 @@ export const sendOtpEmail = async (email: string, otp: string): Promise<void> =>
   };
 
   try {
-    console.log(`✉️ Attempting to send OTP email to: ${email}`);
+    if (env.RESEND_API_KEY) {
+      console.log(`✉️ Attempting to send OTP email via Resend API to: ${email}`);
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: env.EMAIL_FROM || 'onboarding@resend.dev',
+          to: email,
+          subject: mailOptions.subject,
+          html: mailOptions.html,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Resend API returned status ${res.status}: ${errText}`);
+      }
+
+      console.log(`✅ OTP email sent successfully via Resend API to: ${email}`);
+      return;
+    }
+
+    console.log(`✉️ Attempting to send OTP email via SMTP to: ${email}`);
     await transporter.sendMail(mailOptions);
-    console.log(`✅ OTP email sent successfully to: ${email}`);
+    console.log(`✅ OTP email sent successfully via SMTP to: ${email}`);
   } catch (err: any) {
-    console.error('⚠️ SMTP email sending error:', err.message || err);
+    console.error('⚠️ Email sending error:', err.message || err);
     console.log(`🔑 [FAILSAFE DEV OTP] OTP for ${email} is: ${otp} (Copy this from Render logs to log in)`);
     throw err;
   }
