@@ -3,13 +3,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import toast from 'react-hot-toast';
-import { CircleUserRound, Shield, LogOut, Laptop, Smartphone, Key, MapPin, Loader2 } from 'lucide-react';
+import { CircleUserRound, Laptop, Smartphone, Key, MapPin, Loader2 } from 'lucide-react';
 import { authApi } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   address: z.string().optional(),
+  bio: z.string().optional(),
+  department: z.string().optional(),
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
@@ -22,7 +24,7 @@ interface SessionItem {
 }
 
 export const Profile: React.FC = () => {
-  const { user, login, logout } = useAuth();
+  const { user, login, logout, accessToken } = useAuth();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -50,6 +52,8 @@ export const Profile: React.FC = () => {
       reset({
         name: user.name,
         address: user.address || '',
+        bio: (user as any).bio || '',
+        department: (user as any).department || '',
       });
       loadSessions();
     }
@@ -61,8 +65,7 @@ export const Profile: React.FC = () => {
       const res = await authApi.updateMe(values);
       if (res.data.success && res.data.data) {
         toast.success('Profile updated successfully!');
-        const currentToken = (window as any).accessToken || '';
-        login(res.data.data, currentToken);
+        login(res.data.data, accessToken || '');
       }
     } catch (err) {
       toast.error('Failed to update profile.');
@@ -150,6 +153,29 @@ export const Profile: React.FC = () => {
                 />
               </div>
 
+              <div className="form-group">
+                <label className="form-label" htmlFor="prof-dept">Department / College</label>
+                <input
+                  id="prof-dept"
+                  type="text"
+                  placeholder="e.g. Computer Science, Engineering"
+                  className="form-control"
+                  {...register('department')}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="prof-bio">Bio</label>
+                <textarea
+                  id="prof-bio"
+                  rows={3}
+                  placeholder="Tell your neighbours a bit about yourself..."
+                  className="form-control"
+                  style={{ minHeight: 80 }}
+                  {...register('bio')}
+                />
+              </div>
+
               <button
                 type="submit"
                 disabled={updating}
@@ -167,10 +193,28 @@ export const Profile: React.FC = () => {
         {/* Sessions Card */}
         <div className="detail-sidebar">
           <div className="card">
-            <h2 style={{ fontSize: 15, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }} className="text-accent">
-              <Key size={16} />
-              <span>Active Sessions</span>
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 15, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }} className="text-accent">
+                <Key size={16} />
+                <span>Active Sessions</span>
+              </h2>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm('Sign out from all devices? You will be logged out everywhere.')) return;
+                  try {
+                    await authApi.logoutAll();
+                    await logout();
+                  } catch {
+                    toast.error('Failed to sign out all devices.');
+                  }
+                }}
+                className="btn btn-danger btn-sm"
+                style={{ fontSize: 11, padding: '5px 10px' }}
+              >
+                Sign Out All
+              </button>
+            </div>
 
             {loadingSessions ? (
               <div className="spinner-wrap" style={{ padding: '24px 0' }}>

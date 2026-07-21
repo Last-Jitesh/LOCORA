@@ -2,7 +2,8 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ISession extends Document {
   userId: mongoose.Types.ObjectId;
-  tokenHash: string;
+  /** The refresh JWT token (signed, stored directly for rotation/revocation) */
+  refreshToken: string;
   userAgent?: string;
   ipAddress?: string;
   expiresAt: Date;
@@ -12,7 +13,7 @@ export interface ISession extends Document {
 const SessionSchema = new Schema<ISession>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    tokenHash: { type: String, required: true, unique: true },
+    refreshToken: { type: String, required: true, unique: true },
     userAgent: { type: String },
     ipAddress: { type: String },
     expiresAt: { type: Date, required: true },
@@ -20,7 +21,7 @@ const SessionSchema = new Schema<ISession>(
   { timestamps: true }
 );
 
-// TTL index — auto-delete expired sessions
+// TTL index — MongoDB auto-deletes expired tokens
 SessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 SessionSchema.index({ userId: 1 });
 

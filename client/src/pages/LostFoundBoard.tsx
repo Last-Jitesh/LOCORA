@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Plus, MapPin, Calendar, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Search, Plus, MapPin, Calendar, ChevronRight, AlertTriangle, CheckCircle, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { lostFoundApi } from '../api/lostfound';
 import type { LostFound } from '../types';
@@ -51,9 +51,14 @@ export const LostFoundBoard: React.FC = () => {
           <h1>Lost & Found</h1>
           <p className="page-subtitle">Report lost items or browse found objects in your neighbourhood.</p>
         </div>
-        <Link to="/app/lost-found/new" className="btn btn-primary" id="report-item-btn">
-          <Plus size={16} /> Report Item
-        </Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link to="/app/lost-found/chats" className="btn btn-outline" id="my-claims-btn" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MessageSquare size={16} /> My Chats
+          </Link>
+          <Link to="/app/lost-found/new" className="btn btn-primary" id="report-item-btn">
+            <Plus size={16} /> Report Item
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}

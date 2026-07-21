@@ -8,6 +8,7 @@ import {
   MapPin,
   Search,
   Wrench,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,6 +16,7 @@ const navLinks = [
   { to: '/app/activity',       label: 'Activities',     mobileLabel: 'Activities', icon: CalendarDays },
   { to: '/app/lost-found',     label: 'Lost & Found',   mobileLabel: 'Lost/Found', icon: Search },
   { to: '/app/service-alerts', label: 'Service Alerts', mobileLabel: 'Alerts',     icon: Wrench },
+  { to: '/app/services',       label: 'Local Services', mobileLabel: 'Services',   icon: Briefcase },
 ];
 
 export const Sidebar: React.FC = () => {

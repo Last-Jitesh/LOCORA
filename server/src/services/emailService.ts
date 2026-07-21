@@ -58,5 +58,10 @@ export const sendOtpEmail = async (email: string, otp: string): Promise<void> =>
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (err: any) {
+    console.error('⚠️ SMTP email sending error:', err.message || err);
+  }
 };
+

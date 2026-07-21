@@ -1,88 +1,105 @@
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
 import { Request } from 'express';
 import Session from '../models/Session';
 import { env } from '../config/env';
 
+// ── Token lifetimes ──────────────────────────────────────────────────────────
 const ACCESS_TOKEN_EXPIRY = '15m';
-const SESSION_EXPIRY_DAYS = 30;
+const REFRESH_TOKEN_EXPIRY = '30d'; // used in jwt.sign
+const REFRESH_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
 
-/** Create a short-lived JWT access token */
+// ── Access Token ─────────────────────────────────────────────────────────────
+
+/** Create a short-lived JWT access token (15 min) */
 export const createAccessToken = (userId: string, email: string): string => {
-  return jwt.sign({ id: userId, email }, env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+  return jwt.sign({ id: userId, email }, env.JWT_SECRET, {
+    expiresIn: ACCESS_TOKEN_EXPIRY,
+  });
 };
 
-/** Create a new server-side session (opaque refresh token) */
-export const createSession = async (
+// ── Refresh Token ─────────────────────────────────────────────────────────────
+
+/**
+ * Issue a refresh JWT and persist it in MongoDB for rotation / revocation.
+ * Returns the signed refresh token string.
+ */
+export const createRefreshToken = async (
   userId: string,
   req: Request
-): Promise<{ rawToken: string; expiresAt: Date }> => {
-  const rawToken = crypto.randomBytes(48).toString('hex');
-  const salt = await bcrypt.genSalt(10);
-  const tokenHash = await bcrypt.hash(rawToken, salt);
+): Promise<{ refreshToken: string; expiresAt: Date }> => {
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS);
 
-  const expiresAt = new Date(Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+  const refreshToken = jwt.sign(
+    { id: userId },
+    env.REFRESH_TOKEN_SECRET,
+    { expiresIn: REFRESH_TOKEN_EXPIRY }
+  );
 
   await Session.create({
     userId,
-    tokenHash,
+    refreshToken,
     userAgent: req.headers['user-agent'] || '',
     ipAddress: req.ip || '',
     expiresAt,
   });
 
-  return { rawToken, expiresAt };
+  return { refreshToken, expiresAt };
 };
 
-/** Rotate a session: find session by raw token, delete it, create a new one */
-export const rotateSession = async (
-  rawToken: string,
+/**
+ * Verify, rotate, and reissue a refresh token.
+ * The old token is deleted and a new one is stored (token rotation).
+ */
+export const rotateRefreshToken = async (
+  incomingToken: string,
   req: Request
-): Promise<{ userId: string; rawToken: string; expiresAt: Date } | null> => {
-  // Find all non-expired sessions and check hash match
-  const sessions = await Session.find({
-    userId: { $exists: true },
+): Promise<{ userId: string; refreshToken: string; expiresAt: Date } | null> => {
+  // 1. Verify the JWT signature first (fast, no DB hit on invalid tokens)
+  let payload: { id: string };
+  try {
+    payload = jwt.verify(incomingToken, env.REFRESH_TOKEN_SECRET) as { id: string };
+  } catch {
+    return null; // expired or tampered
+  }
+
+  // 2. Find the exact token in the DB (revocation check)
+  const session = await Session.findOne({
+    userId: payload.id,
+    refreshToken: incomingToken,
     expiresAt: { $gt: new Date() },
-  }).limit(500);
+  });
 
-  let matchedSession: (typeof sessions)[number] | null = null;
-  for (const session of sessions) {
-    const isMatch = await bcrypt.compare(rawToken, session.tokenHash);
-    if (isMatch) {
-      matchedSession = session;
-      break;
-    }
-  }
+  if (!session) return null; // already rotated or revoked
 
-  if (!matchedSession) return null;
+  const userId = session.userId.toString();
 
-  const userId = matchedSession.userId.toString();
+  // 3. Delete the old record (rotation — one-time use)
+  await Session.deleteOne({ _id: session._id });
 
-  // Delete old session (rotation)
-  await Session.deleteOne({ _id: matchedSession._id });
+  // 4. Issue a new refresh token and persist it
+  const { refreshToken, expiresAt } = await createRefreshToken(userId, req);
 
-  // Issue new session
-  const { rawToken: newRawToken, expiresAt } = await createSession(userId, req);
-
-  return { userId, rawToken: newRawToken, expiresAt };
+  return { userId, refreshToken, expiresAt };
 };
 
-/** Delete a specific session by raw token (logout) */
-export const deleteSessionByToken = async (rawToken: string): Promise<void> => {
-  const sessions = await Session.find({ expiresAt: { $gt: new Date() } }).limit(500);
-  for (const session of sessions) {
-    const isMatch = await bcrypt.compare(rawToken, session.tokenHash);
-    if (isMatch) {
-      await Session.deleteOne({ _id: session._id });
-      return;
-    }
-  }
+/**
+ * Revoke a specific refresh token (logout from one device).
+ */
+export const revokeRefreshToken = async (refreshToken: string): Promise<void> => {
+  await Session.deleteOne({ refreshToken });
 };
 
-export const SESSION_COOKIE_OPTIONS = {
+/**
+ * Revoke ALL refresh tokens for a user (logout everywhere).
+ */
+export const revokeAllUserTokens = async (userId: string): Promise<void> => {
+  await Session.deleteMany({ userId });
+};
+
+/** Cookie options for the HttpOnly refresh token cookie */
+export const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  maxAge: SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+  maxAge: REFRESH_TOKEN_EXPIRY_MS,
 };

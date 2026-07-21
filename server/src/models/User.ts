@@ -5,10 +5,15 @@ export interface IUser extends Document {
   email: string;
   avatarUrl?: string;
   address?: string;
+  bio?: string;
+  department?: string;
   location?: {
     type: 'Point';
     coordinates: [number, number];
   };
+  latitude?: number;
+  longitude?: number;
+  lastLocationUpdatedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,6 +24,8 @@ const UserSchema = new Schema<IUser>(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     avatarUrl: { type: String },
     address: { type: String },
+    bio: { type: String },
+    department: { type: String },
     location: {
       type: {
         type: String,
@@ -30,6 +37,9 @@ const UserSchema = new Schema<IUser>(
         default: [0, 0],
       },
     },
+    latitude: { type: Number },
+    longitude: { type: Number },
+    lastLocationUpdatedAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -37,3 +47,4 @@ const UserSchema = new Schema<IUser>(
 UserSchema.index({ location: '2dsphere' });
 
 export default mongoose.model<IUser>('User', UserSchema);
+

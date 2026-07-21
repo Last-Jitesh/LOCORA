@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Wrench, Plus, MapPin, Calendar, Clock, ChevronRight, Users } from 'lucide-react';
+import { Wrench, Plus, MapPin, Calendar, Clock, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { serviceAlertApi } from '../../api/serviceAlerts';
 import type { ServiceAlert } from '../../types';

@@ -1,5 +1,5 @@
 import api from './axios';
-import type { LostFound } from '../types';
+import type { LostFound, LostFoundChat } from '../types';
 
 export const lostFoundApi = {
   create: (data: Partial<LostFound>) =>
@@ -16,5 +16,14 @@ export const lostFoundApi = {
 
   delete: (id: string) =>
     api.delete<{ success: boolean }>(`/lost-found/${id}`),
+
+  initiateClaim: (id: string) =>
+    api.post<{ success: boolean; data: LostFoundChat }>(`/lost-found/${id}/claim`),
+
+  getChat: (id: string) =>
+    api.get<{ success: boolean; data: LostFoundChat }>(`/lost-found/${id}/chat`),
+
+  getMyClaims: () =>
+    api.get<{ success: boolean; data: LostFoundChat[] }>('/lost-found/chats/my'),
 };
 export default lostFoundApi;

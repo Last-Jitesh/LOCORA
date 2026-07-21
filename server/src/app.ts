@@ -11,6 +11,8 @@ import userRoutes from './routes/userRoutes';
 import activityRoutes from './routes/activityRoutes';
 import lostFoundRoutes from './routes/lostFoundRoutes';
 import serviceAlertRoutes from './routes/serviceAlertRoutes';
+import blockRoutes from './routes/blockRoutes';
+import serviceRoutes from './routes/serviceRoutes';
 
 const app = express();
 
@@ -33,6 +35,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/activities', activityRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/service-alerts', serviceAlertRoutes);
+app.use('/api/blocks', blockRoutes);
+app.use('/api/services', serviceRoutes);
 
 // ── Error Handling ─────────────────────────────────────────────────────────
 app.use(notFound);

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, Plus, MapPin, Calendar, Clock, Users, ChevronRight } from 'lucide-react';
+import { CalendarDays, Plus, MapPin, Calendar, Clock, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { activityApi } from '../api/activity';
 import type { Activity } from '../types';
@@ -107,61 +107,72 @@ export const Activities: React.FC = () => {
         </div>
       ) : (
         <div className="card-grid">
-          {activities.map((act, i) => (
-            <Link
-              key={act._id}
-              to={`/app/activity/${act._id}`}
-              className={`item-card fade-up delay-${Math.min(i + 1, 3)}`}
-              id={`activity-card-${act._id}`}
-            >
-              {/* Top row */}
-              <div className="item-card-top">
-                <span className="badge badge-accent">{act.category}</span>
-                {act.interestedCount !== undefined && act.interestedCount > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
-                    <Users size={13} /> {act.interestedCount}
-                  </span>
-                )}
-              </div>
-
-              {/* Title & desc */}
-              <div>
-                <div className="item-card-title">{act.title}</div>
-                {act.description && (
-                  <div className="item-card-desc" style={{ marginTop: 6 }}>{act.description}</div>
-                )}
-              </div>
-
-              {/* Meta */}
-              <div className="item-card-meta">
-                <div className="item-card-meta-row">
-                  <Calendar size={13} />
-                  <span>{formatDate(act.startTime)}</span>
+          {activities.map((act, i) => {
+            const maxParts = act.maxParticipants || 10;
+            const currParts = act.currentParticipants || 0;
+            const isFull = currParts >= maxParts;
+            const remaining = Math.max(0, maxParts - currParts);
+            return (
+              <Link
+                key={act._id}
+                to={`/app/activity/${act._id}`}
+                className={`item-card fade-up delay-${Math.min(i + 1, 3)}`}
+                id={`activity-card-${act._id}`}
+              >
+                {/* Top row */}
+                <div className="item-card-top">
+                  <span className="badge badge-accent">{act.category || 'Event'}</span>
+                  {isFull ? (
+                    <span className="badge badge-red">No Slots Left</span>
+                  ) : (
+                    <span className="badge badge-green" style={{ fontSize: 11 }}>
+                      {remaining} {remaining === 1 ? 'slot' : 'slots'} left
+                    </span>
+                  )}
                 </div>
-                <div className="item-card-meta-row">
-                  <Clock size={13} />
-                  <span>{formatTime(act.startTime)}</span>
+
+                {/* Title & desc */}
+                <div>
+                  <div className="item-card-title">{act.title}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>
+                    Joined: {currParts} / {maxParts}
+                  </div>
+                  {act.description && (
+                    <div className="item-card-desc" style={{ marginTop: 6 }}>{act.description}</div>
+                  )}
                 </div>
-                {act.address && (
+
+                {/* Meta */}
+                <div className="item-card-meta">
                   <div className="item-card-meta-row">
-                    <MapPin size={13} />
-                    <span className="truncate-1" style={{ maxWidth: 200 }}>{act.address}</span>
+                    <Calendar size={13} />
+                    <span>{formatDate(act.startTime)}</span>
                   </div>
-                )}
-                {act.distance !== undefined && (
-                  <div style={{ fontSize: 11, color: 'var(--accent-dark)', fontWeight: 700, marginTop: 2 }}>
-                    {(act.distance / 1000).toFixed(1)} km away
+                  <div className="item-card-meta-row">
+                    <Clock size={13} />
+                    <span>{formatTime(act.startTime)}</span>
                   </div>
-                )}
-              </div>
+                  {act.address && (
+                    <div className="item-card-meta-row">
+                      <MapPin size={13} />
+                      <span className="truncate-1" style={{ maxWidth: 200 }}>{act.address}</span>
+                    </div>
+                  )}
+                  {act.distance !== undefined && (
+                    <div style={{ fontSize: 11, color: 'var(--accent-dark)', fontWeight: 700, marginTop: 2 }}>
+                      {(act.distance / 1000).toFixed(1)} km away
+                    </div>
+                  )}
+                </div>
 
-              {/* Footer CTA */}
-              <div className="item-card-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-dark)' }}>View details</span>
-                <ChevronRight size={16} color="var(--accent)" />
-              </div>
-            </Link>
-          ))}
+                {/* Footer CTA */}
+                <div className="item-card-footer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-dark)' }}>View details</span>
+                  <ChevronRight size={16} color="var(--accent)" />
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

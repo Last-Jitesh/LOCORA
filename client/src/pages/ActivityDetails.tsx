@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Calendar, Clock, MapPin, Star, Trash2, ArrowLeft, Loader2, Users } from 'lucide-react';
+import { Calendar, Clock, MapPin, Trash2, ArrowLeft, Loader2, Users, MessageSquare, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { activityApi } from '../api/activity';
-import type { ActivityInterestResponse } from '../api/activity';
 import { useAuth } from '../context/AuthContext';
 import MapView from '../components/MapView';
-import type { Activity } from '../types';
+import useSocket from '../hooks/useSocket';
+import type { Activity, User } from '../types';
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -19,45 +19,108 @@ export const ActivityDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const socket = useSocket();
 
   const [activity, setActivity] = useState<Activity | null>(null);
-  const [interestedUsers, setInterestedUsers] = useState<ActivityInterestResponse[]>([]);
+  const [participants, setParticipants] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [isInterested, setIsInterested] = useState(false);
+  const [isJoined, setIsJoined] = useState(false);
 
   const fetchDetails = async () => {
     if (!id) return;
     try {
       const res = await activityApi.getById(id);
-      if (res.data.success && res.data.data) setActivity(res.data.data);
-
-      const iRes = await activityApi.getInterestedUsers(id);
-      if (iRes.data.success && iRes.data.data) {
-        setInterestedUsers(iRes.data.data);
-        setIsInterested(iRes.data.data.some(i => i.userId._id === user?.id));
+      if (res.data.success && res.data.data) {
+        setActivity(res.data.data);
       }
     } catch {
       toast.error('Failed to load activity details.');
       navigate('/app/activity');
-    } finally {
-      setLoading(false);
     }
   };
 
-  useEffect(() => { fetchDetails(); }, [id, user]);
+  const fetchParticipants = async () => {
+    if (!id) return;
+    try {
+      const res = await activityApi.getParticipants(id);
+      if (res.data.success && res.data.data) {
+        setParticipants(res.data.data.participants);
+        setIsJoined(res.data.data.participants.some(p => p._id === user?.id || p.id === user?.id));
+      }
+    } catch (err) {
+      console.error('Failed to load participants list', err);
+    }
+  };
 
-  const handleToggleInterest = async () => {
+  const loadAll = async () => {
+    setLoading(true);
+    await Promise.all([fetchDetails(), fetchParticipants()]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadAll();
+  }, [id, user]);
+
+  // Socket.IO Room Listeners for Real-Time counter & Moderation
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    socket.emit('joinActivityRoom', { activityId: id });
+
+    socket.on('participant:update', (data: { activityId: string; currentParticipants: number; maxParticipants: number; isFull: boolean }) => {
+      if (data.activityId === id) {
+        setActivity(prev => prev ? {
+          ...prev,
+          currentParticipants: data.currentParticipants,
+          maxParticipants: data.maxParticipants
+        } : null);
+        fetchParticipants();
+      }
+    });
+
+    socket.on('user:blocked', (data: { blockedUserId: string; activityId: string; message: string }) => {
+      if (data.activityId === id && data.blockedUserId === user?.id) {
+        toast.error(data.message);
+        navigate('/app/activity');
+      }
+    });
+
+    return () => {
+      socket.emit('leaveActivityRoom', { activityId: id });
+      socket.off('participant:update');
+      socket.off('user:blocked');
+    };
+  }, [socket, id, user, navigate]);
+
+  const handleJoinLeave = async () => {
     if (!id || actionLoading) return;
     setActionLoading(true);
     try {
-      await activityApi.toggleInterest(id);
-      toast.success(isInterested ? 'Removed interest.' : 'Interest expressed! The host will be notified.');
-      await fetchDetails();
+      if (isJoined) {
+        await activityApi.leave(id);
+        toast.success('You left this activity.');
+      } else {
+        await activityApi.join(id);
+        toast.success('Successfully joined the activity!');
+      }
+      await Promise.all([fetchDetails(), fetchParticipants()]);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Action failed.');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleBlockParticipant = async (participantId: string, participantName: string) => {
+    if (!id || !window.confirm(`Are you sure you want to block ${participantName}? They will be removed from this activity, from the group chat, and blocked from all your future hosted activities.`)) return;
+    try {
+      await activityApi.blockUser({ blockedUserId: participantId, activityId: id });
+      toast.success(`${participantName} has been blocked.`);
+      await Promise.all([fetchDetails(), fetchParticipants()]);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to block user.');
     }
   };
 
@@ -82,7 +145,16 @@ export const ActivityDetails: React.FC = () => {
   }
 
   if (!activity) return null;
-  const isCreator = activity.createdBy._id === user?.id;
+  const hostId = typeof activity.createdBy === 'object' ? (activity.createdBy as any)?._id : activity.createdBy;
+  const hostName = typeof activity.createdBy === 'object' ? (activity.createdBy as any)?.name : 'Host Neighbour';
+  const hostAvatar = typeof activity.createdBy === 'object' ? (activity.createdBy as any)?.avatarUrl : undefined;
+  const isCreator = Boolean(hostId && user?.id && String(hostId) === String(user.id));
+
+  const maxParts = activity.maxParticipants || 10;
+  const currParts = activity.currentParticipants || 0;
+  const remainingSlots = Math.max(0, maxParts - currParts);
+  const isFull = currParts >= maxParts;
+  const canAccessChat = isCreator || isJoined;
 
   return (
     <div className="page-shell fade-up">
@@ -103,7 +175,7 @@ export const ActivityDetails: React.FC = () => {
         <div className="detail-main">
           {/* Event header card */}
           <div className="card">
-            <span className="badge badge-accent" style={{ marginBottom: 16 }}>{activity.category}</span>
+            <span className="badge badge-accent" style={{ marginBottom: 16 }}>{activity.category || 'Event'}</span>
             <h1 style={{ fontSize: 'clamp(1.4rem, 2.5vw, 1.9rem)', marginBottom: 12 }}>{activity.title}</h1>
             {activity.description && (
               <p style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.7, marginBottom: 24, whiteSpace: 'pre-line' }}>
@@ -142,8 +214,8 @@ export const ActivityDetails: React.FC = () => {
             </div>
           </div>
 
-          {/* Map */}
-          {activity.location?.coordinates && (
+          {/* Map (Optional display if lat/lng are set) */}
+          {activity.location?.coordinates && activity.location.coordinates[0] !== 0 && (
             <div className="map-wrapper" style={{ height: 280 }}>
               <MapView
                 lat={activity.location.coordinates[1]}
@@ -158,7 +230,7 @@ export const ActivityDetails: React.FC = () => {
 
         {/* ── Sidebar panel ──────────────────────────────────────────── */}
         <div className="detail-sidebar">
-          {/* Interest CTA */}
+          {/* Join / Leave CTA */}
           <div className="card" style={{ textAlign: 'center' }}>
             <div style={{ marginBottom: 16 }}>
               <div style={{
@@ -166,26 +238,57 @@ export const ActivityDetails: React.FC = () => {
                 background: 'var(--accent-light)', borderRadius: '50%',
                 display: 'grid', placeItems: 'center', color: 'var(--accent-dark)',
               }}>
-                <Star size={22} />
+                <Users size={22} />
               </div>
-              <h3 style={{ fontSize: 15, marginBottom: 6 }}>Join this activity?</h3>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Let the host know you're interested.
-              </p>
+              <h3 style={{ fontSize: 15, marginBottom: 6 }}>
+                {isCreator ? 'Hosting Activity' : 'Join this activity?'}
+              </h3>
+              
+              {/* Real-time counters */}
+              <div style={{ margin: '12px 0', padding: 12, background: 'var(--bg-subtle)', borderRadius: 'var(--r-md)' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-h)' }}>
+                  Joined: {currParts} / {maxParts}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {isFull ? (
+                    <span style={{ color: 'var(--err)', fontWeight: 600 }}>No Slots Left</span>
+                  ) : (
+                    `Remaining Slots: ${remainingSlots}`
+                  )}
+                </div>
+              </div>
             </div>
 
-            <button
-              onClick={handleToggleInterest}
-              disabled={actionLoading || isCreator}
-              className={isInterested ? 'btn btn-outline btn-full' : 'btn btn-primary btn-full'}
-              id="express-interest-btn"
-            >
-              {actionLoading
-                ? <Loader2 size={16} className="animate-spin" />
-                : <Star size={16} style={{ fill: isInterested ? 'var(--accent)' : 'none' }} />
-              }
-              {isInterested ? 'Interested ✓' : 'Express Interest'}
-            </button>
+            {!isCreator && (
+              <button
+                onClick={handleJoinLeave}
+                disabled={actionLoading || (isFull && !isJoined)}
+                className={isJoined ? 'btn btn-outline btn-full' : 'btn btn-primary btn-full'}
+                id="join-activity-btn"
+              >
+                {actionLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : isJoined ? (
+                  'Leave Activity'
+                ) : isFull ? (
+                  'No Slots Left'
+                ) : (
+                  'Join Activity'
+                )}
+              </button>
+            )}
+
+            {/* Chat button */}
+            {canAccessChat && (
+              <Link
+                to={`/app/activity/${activity._id}/chat`}
+                className="btn btn-accent btn-full"
+                style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                id="open-group-chat-btn"
+              >
+                <MessageSquare size={16} /> Open Group Chat
+              </Link>
+            )}
 
             {isCreator && (
               <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
@@ -198,42 +301,67 @@ export const ActivityDetails: React.FC = () => {
           <div className="card">
             <div className="section-eyebrow" style={{ marginBottom: 14 }}>Hosted by</div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div className="avatar avatar-md">
-                {activity.createdBy.avatarUrl
-                  ? <img src={activity.createdBy.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                  : activity.createdBy.name.charAt(0).toUpperCase()
-                }
+              <div className="avatar avatar-md" style={{ cursor: 'pointer' }} onClick={() => hostId && navigate(`/app/users/${hostId}`)}>
+                {hostAvatar ? (
+                  <img src={hostAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                ) : (
+                  hostName.charAt(0).toUpperCase()
+                )}
               </div>
-              <div>
-                <div style={{ fontWeight: 700, color: 'var(--text-h)', fontSize: 14 }}>{activity.createdBy.name}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Neighbour</div>
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{ fontWeight: 700, color: 'var(--text-h)', fontSize: 14, cursor: 'pointer' }}
+                  onClick={() => hostId && navigate(`/app/users/${hostId}`)}
+                >
+                  {hostName}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Host Neighbour</div>
               </div>
             </div>
           </div>
 
-          {/* Interested neighbors */}
+          {/* Participant list */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <div className="section-eyebrow" style={{ margin: 0 }}>Interested</div>
-              {interestedUsers.length > 0 && (
-                <span className="badge badge-accent" style={{ marginLeft: 'auto' }}>
-                  <Users size={10} /> {interestedUsers.length}
-                </span>
-              )}
+              <div className="section-eyebrow" style={{ margin: 0 }}>Participants ({participants.length})</div>
             </div>
-            {interestedUsers.length === 0 ? (
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No neighbours interested yet.</p>
+            {participants.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No participants joined yet.</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 200, overflowY: 'auto' }}>
-                {interestedUsers.map(item => (
-                  <div key={item._id} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <div className="avatar avatar-sm">
-                      {item.userId.avatarUrl
-                        ? <img src={item.userId.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                        : item.userId.name.charAt(0).toUpperCase()
-                      }
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 250, overflowY: 'auto' }}>
+                {participants.map(p => (
+                  <div key={p._id || p.id} style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0 }}>
+                      <div
+                        className="avatar avatar-sm"
+                        style={{ cursor: 'pointer', flexShrink: 0 }}
+                        onClick={() => navigate(`/app/users/${p._id || p.id}`)}
+                      >
+                        {p.avatarUrl ? (
+                          <img src={p.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                        ) : (
+                          p.name.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <span
+                        style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-h)', cursor: 'pointer' }}
+                        className="truncate-1"
+                        onClick={() => navigate(`/app/users/${p._id || p.id}`)}
+                      >
+                        {p.name}
+                      </span>
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-h)' }}>{item.userId.name}</span>
+
+                    {/* Host moderation block button */}
+                    {isCreator && (p._id !== user?.id && p.id !== user?.id) && (
+                      <button
+                        onClick={() => handleBlockParticipant(p._id || p.id || '', p.name)}
+                        className="btn btn-danger btn-sm"
+                        style={{ padding: '4px 8px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <ShieldAlert size={12} /> Block
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

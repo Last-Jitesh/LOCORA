@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import LostFound from '../models/LostFound';
+import LostFoundChat from '../models/LostFoundChat';
 import { AuthRequest } from '../middleware/auth';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import { parseRadius, parseCoords, kmToMeters } from '../utils/geo';
@@ -122,7 +123,102 @@ export const deleteLostFound = async (req: AuthRequest, res: Response): Promise<
       return;
     }
     await LostFound.deleteOne({ _id: item._id });
+    // Also delete any chats associated with this item
+    await LostFoundChat.deleteMany({ itemId: item._id });
     sendSuccess(res, null, 'Post deleted.');
+  } catch (error: unknown) {
+    sendError(res, (error as Error).message, 500);
+  }
+};
+
+
+export const initiateClaim = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const itemId = req.params.id;
+    const claimantId = req.user!.id;
+
+    const item = await LostFound.findById(itemId);
+    if (!item) {
+      sendError(res, 'Item not found.', 404);
+      return;
+    }
+
+    const ownerId = item.reportedBy.toString();
+
+    if (ownerId === claimantId) {
+      sendError(res, 'You cannot claim your own item.', 400);
+      return;
+    }
+
+    // Find or create chat
+    let chat = await LostFoundChat.findOne({ itemId, claimantId });
+    if (!chat) {
+      chat = await LostFoundChat.create({
+        itemId,
+        ownerId,
+        claimantId,
+        messages: [],
+      });
+    }
+
+    sendSuccess(res, chat, 'Claim initiated / retrieved.');
+  } catch (error: unknown) {
+    sendError(res, (error as Error).message, 500);
+  }
+};
+
+export const getClaimChat = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    // req.params.id is the itemId, or we can look up by chatId
+    // Let's support both: find by chatId or find by itemId and claimantId.
+    const chatIdOrItemId = req.params.id;
+
+    let chat = await LostFoundChat.findById(chatIdOrItemId)
+      .populate('ownerId', 'name avatarUrl email')
+      .populate('claimantId', 'name avatarUrl email')
+      .populate('itemId', 'title type status description');
+
+    if (!chat) {
+      // Try finding by itemId where the current user is claimant or owner
+      chat = await LostFoundChat.findOne({
+        itemId: chatIdOrItemId,
+        $or: [{ ownerId: userId }, { claimantId: userId }],
+      })
+        .populate('ownerId', 'name avatarUrl email')
+        .populate('claimantId', 'name avatarUrl email')
+        .populate('itemId', 'title type status description');
+    }
+
+    if (!chat) {
+      sendError(res, 'Chat not found.', 404);
+      return;
+    }
+
+    // Auth check: must be owner or claimant
+    if (chat.ownerId._id.toString() !== userId && chat.claimantId._id.toString() !== userId) {
+      sendError(res, 'Access denied.', 403);
+      return;
+    }
+
+    sendSuccess(res, chat, 'Chat retrieved.');
+  } catch (error: unknown) {
+    sendError(res, (error as Error).message, 500);
+  }
+};
+
+export const getMyClaims = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const chats = await LostFoundChat.find({
+      $or: [{ ownerId: userId }, { claimantId: userId }],
+    })
+      .populate('ownerId', 'name avatarUrl email')
+      .populate('claimantId', 'name avatarUrl email')
+      .populate('itemId', 'title type status description')
+      .sort({ updatedAt: -1 });
+
+    sendSuccess(res, chats);
   } catch (error: unknown) {
     sendError(res, (error as Error).message, 500);
   }

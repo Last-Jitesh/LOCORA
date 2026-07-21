@@ -13,6 +13,9 @@ export interface IActivity extends Document {
   endTime?: Date;
   createdBy: mongoose.Types.ObjectId;
   interestedCount: number;
+  maxParticipants: number;
+  currentParticipants: number;
+  participants: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +38,9 @@ const ActivitySchema = new Schema<IActivity>(
     endTime: { type: Date },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     interestedCount: { type: Number, default: 0 },
+    maxParticipants: { type: Number, required: true, min: 2 },
+    currentParticipants: { type: Number, default: 0 },
+    participants: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true }
 );

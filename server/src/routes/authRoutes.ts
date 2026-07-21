@@ -1,6 +1,16 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { requestOtp, verifyOtp, refresh, logout, getMe, updateMe, getSessions, revokeSession } from '../controllers/authController';
+import {
+  requestOtp,
+  verifyOtp,
+  refresh,
+  logout,
+  logoutAll,
+  getMe,
+  updateMe,
+  getSessions,
+  revokeSession,
+} from '../controllers/authController';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
@@ -26,14 +36,17 @@ const otpVerifyLimiter = rateLimit({
 router.post('/otp/request', otpRequestLimiter, requestOtp);
 router.post('/otp/verify', otpVerifyLimiter, verifyOtp);
 
-// Session management
+// JWT refresh token rotation
 router.post('/refresh', refresh);
 router.post('/logout', logout);
+router.post('/logout-all', authMiddleware, logoutAll);
 
-// Protected routes
-router.get('/me', authMiddleware, getMe);
-router.patch('/me', authMiddleware, updateMe);
+// Active sessions (per-user device management)
 router.get('/sessions', authMiddleware, getSessions);
 router.delete('/sessions/:id', authMiddleware, revokeSession);
+
+// Protected profile routes
+router.get('/me', authMiddleware, getMe);
+router.patch('/me', authMiddleware, updateMe);
 
 export default router;

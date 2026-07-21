@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Calendar, Clock, MapPin, Trash2, ArrowLeft, Loader2, Send, Check, X, ShieldAlert } from 'lucide-react';
+import { Calendar, Clock, MapPin, ArrowLeft, Loader2, Send, Check, X, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { serviceAlertApi } from '../../api/serviceAlerts';
 import type { ServiceAlertInterestResponse } from '../../api/serviceAlerts';

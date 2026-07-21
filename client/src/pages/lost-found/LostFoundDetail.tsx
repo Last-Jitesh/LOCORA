@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Calendar, MapPin, Trash2, CheckCircle, ArrowLeft, PhoneCall, AlertTriangle } from 'lucide-react';
+import { Calendar, MapPin, Trash2, CheckCircle, ArrowLeft, PhoneCall, AlertTriangle, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { lostFoundApi } from '../../api/lostfound';
 import { useAuth } from '../../context/AuthContext';
@@ -179,7 +179,7 @@ export const LostFoundDetail: React.FC = () => {
               </div>
               <h3 style={{ fontSize: 14, marginBottom: 6 }}>Contact the reporter</h3>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                For privacy, reveal contact only if you can genuinely help.
+                Coordinate safe returns. Meet in a public place.
               </p>
             </div>
 
@@ -187,6 +187,7 @@ export const LostFoundDetail: React.FC = () => {
               <div style={{
                 background: 'var(--bg-subtle)', border: '1px solid var(--border)',
                 borderRadius: 'var(--r-md)', padding: '14px 16px', textAlign: 'left',
+                marginBottom: 12,
               }}>
                 <div className="section-eyebrow" style={{ marginBottom: 8 }}>Contact preference</div>
                 <p style={{ fontWeight: 600, color: 'var(--text-h)', fontSize: 14, wordBreak: 'break-word' }}>
@@ -205,10 +206,30 @@ export const LostFoundDetail: React.FC = () => {
             ) : (
               <button
                 onClick={() => setRevealContact(true)}
-                className="btn btn-primary btn-full"
+                className="btn btn-outline btn-full"
                 id="reveal-contact-btn"
+                style={{ marginBottom: 10 }}
               >
                 <PhoneCall size={15} /> Show Contact Info
+              </button>
+            )}
+
+            {!isCreator && (
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await lostFoundApi.initiateClaim(item._id);
+                    if (res.data.success && res.data.data) {
+                      navigate(`/app/lost-found/chats/${res.data.data._id}`);
+                    }
+                  } catch (err: any) {
+                    toast.error(err.response?.data?.message || 'Failed to initiate chat.');
+                  }
+                }}
+                className="btn btn-primary btn-full"
+                id="chat-reporter-btn"
+              >
+                <MessageSquare size={15} /> Chat with Reporter
               </button>
             )}
           </div>

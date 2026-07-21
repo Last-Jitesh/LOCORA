@@ -1,24 +1,24 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Loader2, CalendarDays } from 'lucide-react';
 import { activityApi } from '../api/activity';
-import LocationPicker from '../components/shared/LocationPicker';
+import { useGeolocation } from '../hooks/useGeolocation';
 
 const activitySchema = z.object({
   title:       z.string().min(5, 'Title must be at least 5 characters').max(100),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   category:    z.enum(['sport', 'wellness', 'social', 'education', 'garage-sale', 'volunteering', 'other']),
-  location:    z.object({
-    address: z.string().min(1, 'Please enter an address'),
-    lat:     z.number().refine(v => v !== 0, 'Please detect coordinates'),
-    lng:     z.number().refine(v => v !== 0, 'Please detect coordinates'),
-  }),
-  startTime: z.string().min(1, 'Start time is required'),
-  endTime:   z.string().optional(),
+  address:     z.string().min(1, 'Please enter a venue/address'),
+  startTime:   z.string().min(1, 'Start time is required'),
+  endTime:     z.string().optional(),
+  maxParticipants: z.preprocess(
+    (val) => Number(val),
+    z.number().min(2, 'Maximum participants must be at least 2')
+  ),
 });
 type ActivityFormValues = z.infer<typeof activitySchema>;
 
@@ -35,10 +35,11 @@ const CATEGORIES = [
 export const ActivityForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { coords } = useGeolocation();
 
-  const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<ActivityFormValues>({
+  const { register, handleSubmit, formState: { errors } } = useForm<ActivityFormValues>({
     resolver: zodResolver(activitySchema),
-    defaultValues: { category: 'other', location: { address: '', lat: 0, lng: 0 } },
+    defaultValues: { category: 'other', maxParticipants: 10 },
   });
 
   const onSubmit = async (values: ActivityFormValues) => {
@@ -48,10 +49,11 @@ export const ActivityForm: React.FC = () => {
         title:       values.title,
         description: values.description,
         category:    values.category,
-        address:     values.location.address,
-        lat:         values.location.lat,
-        lng:         values.location.lng,
+        address:     values.address,
+        lat:         coords?.lat || 0,
+        lng:         coords?.lng || 0,
         startTime:   values.startTime,
+        maxParticipants: values.maxParticipants,
         ...(values.endTime && { endTime: values.endTime }),
       };
       const res = await activityApi.create(payload);
@@ -102,32 +104,40 @@ export const ActivityForm: React.FC = () => {
               {errors.title && <span className="form-error">{errors.title.message}</span>}
             </div>
 
-            {/* Category */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="act-category">Category</label>
-              <select id="act-category" className="form-control" {...register('category')}>
-                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-              </select>
+            {/* Category & Max Participants */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="act-category">Category</label>
+                <select id="act-category" className="form-control" {...register('category')}>
+                  {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="act-max-participants">Maximum Participants</label>
+                <input
+                  id="act-max-participants"
+                  type="number"
+                  placeholder="e.g. 10"
+                  className={`form-control ${errors.maxParticipants ? 'error' : ''}`}
+                  {...register('maxParticipants')}
+                />
+                {errors.maxParticipants && <span className="form-error">{errors.maxParticipants.message}</span>}
+              </div>
             </div>
 
-            {/* Location */}
-            <Controller
-              control={control}
-              name="location"
-              render={({ field }) => (
-                <LocationPicker
-                  address={field.value.address}
-                  lat={field.value.lat}
-                  lng={field.value.lng}
-                  required
-                  onChange={val => setValue('location', val, { shouldValidate: true })}
-                />
-              )}
-            />
-            {errors.location?.address && <span className="form-error">{errors.location.address.message}</span>}
-            {(errors.location?.lat || errors.location?.lng) && (
-              <span className="form-error">Please use "Detect Location" to confirm coordinates.</span>
-            )}
+            {/* Venue Address (No detect coordinates needed) */}
+            <div className="form-group">
+              <label className="form-label" htmlFor="act-address">Venue Address / Location</label>
+              <input
+                id="act-address"
+                type="text"
+                placeholder="e.g. Community Center, 42 Park Avenue"
+                className={`form-control ${errors.address ? 'error' : ''}`}
+                {...register('address')}
+              />
+              {errors.address && <span className="form-error">{errors.address.message}</span>}
+            </div>
 
             {/* Date & Time */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
