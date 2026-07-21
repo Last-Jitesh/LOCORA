@@ -25,9 +25,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^9.0.3",
     "socket.io": "^4.7.5",
-    "streamifier": "^0.1.1"
-  },
-  "devDependencies": {
+    "streamifier": "^0.1.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
@@ -40,5 +38,7 @@
     "nodemon": "^3.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
-  }
+  },
+  "devDependencies": {}
 }
+
