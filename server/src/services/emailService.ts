@@ -77,9 +77,12 @@ export const sendOtpEmail = async (email: string, otp: string): Promise<void> =>
   };
 
   try {
+    console.log(`✉️ Attempting to send OTP email to: ${email}`);
     await transporter.sendMail(mailOptions);
+    console.log(`✅ OTP email sent successfully to: ${email}`);
   } catch (err: any) {
     console.error('⚠️ SMTP email sending error:', err.message || err);
+    throw err; // throw so the background promise catch registers it
   }
 };
 
