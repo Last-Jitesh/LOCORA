@@ -1,21 +1,33 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 
-const transporter = nodemailer.createTransport({
-  host: env.EMAIL_HOST,
-  port: Number(env.EMAIL_PORT),
-  secure: Number(env.EMAIL_PORT) === 465,
-  auth: {
-    user: env.EMAIL_USER,
-    pass: env.EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  connectionTimeout: 10000, // 10 seconds
-  socketTimeout: 15000,     // 15 seconds
-  family: 4,                // Force IPv4 to bypass Render's IPv6 ENETUNREACH error
-} as any);
+const isGmail = env.EMAIL_HOST.includes('gmail') || env.EMAIL_USER.endsWith('@gmail.com');
+
+const transporter = nodemailer.createTransport(
+  (isGmail
+    ? {
+        service: 'gmail',
+        auth: {
+          user: env.EMAIL_USER,
+          pass: env.EMAIL_PASS,
+        },
+      }
+    : {
+        host: env.EMAIL_HOST,
+        port: Number(env.EMAIL_PORT),
+        secure: Number(env.EMAIL_PORT) === 465,
+        auth: {
+          user: env.EMAIL_USER,
+          pass: env.EMAIL_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 10000, // 10 seconds
+        socketTimeout: 15000,     // 15 seconds
+        family: 4,                // Force IPv4
+      }) as any
+);
 
 export const sendOtpEmail = async (email: string, otp: string): Promise<void> => {
   const mailOptions = {
