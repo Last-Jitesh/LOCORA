@@ -25,7 +25,10 @@ export const requestOtp = async (req: Request, res: Response): Promise<void> => 
     }
 
     const otp = await generateAndStoreOtp(email.toLowerCase());
-    await sendOtpEmail(email.toLowerCase(), otp);
+    // Trigger email send in background so the API responds instantly
+    sendOtpEmail(email.toLowerCase(), otp).catch((err) => {
+      console.error('Background SMTP send error:', err);
+    });
 
     sendSuccess(res, null, 'OTP sent to your email. Check your inbox.');
   } catch (error: unknown) {
