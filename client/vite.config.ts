@@ -36,8 +36,8 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/api': { target: 'http://localhost:5000', changeOrigin: true },
-      '/socket.io': { target: 'http://localhost:5000', ws: true, changeOrigin: true },
+      '/api': { target: 'https://locora.onrender.com', changeOrigin: true },
+      '/socket.io': { target: 'https://locora.onrender.com', ws: true, changeOrigin: true },
     },
   },
 });
