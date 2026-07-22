@@ -9,13 +9,7 @@ export const env = {
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
   NODE_ENV: process.env.NODE_ENV || 'development',
 
-  // Email / OTP
-  EMAIL_HOST: process.env.EMAIL_HOST || 'smtp.gmail.com',
-  EMAIL_PORT: process.env.EMAIL_PORT || '587',
-  EMAIL_USER: process.env.EMAIL_USER || '',
-  EMAIL_PASS: process.env.EMAIL_PASS || '',
+  // Email / OTP — powered by Brevo
   EMAIL_FROM: process.env.EMAIL_FROM || '"Locora" <noreply@locora.app>',
-  RESEND_API_KEY: process.env.RESEND_API_KEY || '',
-  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY || '',
   BREVO_API_KEY: process.env.BREVO_API_KEY || '',
 };
