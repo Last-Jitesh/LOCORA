@@ -127,7 +127,7 @@ export const getActivityById = async (req: Request, res: Response): Promise<void
     const activity = await Activity.findById(req.params.id)
       .populate('createdBy', 'name avatarUrl email department bio')
       .populate('participants', 'name avatarUrl email department bio');
-    if (!activity) { sendError(res, 'Activity not found.', 404); return; }
+    if (!activity)   { sendError(res, 'Activity not found.', 404); return; }
     sendSuccess(res, activity);
   } catch (error: unknown) {
     sendError(res, (error as Error).message, 500);
@@ -282,17 +282,6 @@ export const markInterested = async (req: AuthRequest, res: Response): Promise<v
       await Activity.findByIdAndUpdate(req.params.id, { $inc: { interestedCount: 1 } });
       sendSuccess(res, null, 'Marked as interested.');
     }
-  } catch (error: unknown) {
-    sendError(res, (error as Error).message, 500);
-  }
-};
-
-export const getInterestedUsers = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const interests = await ActivityInterest.find({ activityId: req.params.id })
-      .populate('userId', 'name avatarUrl')
-      .sort({ createdAt: -1 });
-    sendSuccess(res, interests);
   } catch (error: unknown) {
     sendError(res, (error as Error).message, 500);
   }
