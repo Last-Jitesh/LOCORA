@@ -64,12 +64,15 @@ export const sendOtpEmail = async (email: string, otp: string): Promise<void> =>
     }),
   });
 
+  const responseBody = await res.text();
+
   if (!res.ok) {
-    const errText = await res.text();
-    console.error('⚠️ Brevo email error:', errText);
+    console.error('⚠️ Brevo email error:', responseBody);
     console.log(`🔑 [FAILSAFE DEV OTP] OTP for ${email} is: ${otp} (Copy this from Render logs to log in)`);
-    throw new Error(`Brevo API returned status ${res.status}: ${errText}`);
+    throw new Error(`Brevo API returned status ${res.status}: ${responseBody}`);
   }
 
-  console.log(`✅ OTP email sent successfully via Brevo to: ${email}`);
+  console.log(`✅ OTP email sent via Brevo to: ${email}`);
+  console.log(`📨 Brevo response:`, responseBody);
+  console.log(`📧 Sender used: ${fromEmail}`);
 };
