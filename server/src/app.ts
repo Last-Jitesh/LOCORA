@@ -21,6 +21,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://locora-on.vercel.app',
   'http://locora.sumitksr.xyz',
+  'https://locora.sumitksr.xyz',  // ← Added HTTPS version
 ];
 
 // ── Security Middleware ───────────────────────────────────────────────────────
