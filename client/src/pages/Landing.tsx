@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, Search, Wrench, ArrowRight, MapPin, Users, Shield } from 'lucide-react';
 
@@ -21,6 +21,11 @@ const features = [
 ];
 
 export const Landing: React.FC = () => {
+  useEffect(() => {
+    // Wake up the backend on Render so that the server is ready by the time the user reaches the sign in page
+    fetch(`${import.meta.env.VITE_API_URL}/health`).catch(() => {});
+  }, []);
+
   return (
     <div className="landing-shell">
       {/* ── Hero ───────────────────────────────────────────────────────── */}
