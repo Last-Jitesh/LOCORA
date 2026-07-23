@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { CalendarDays, Search, Wrench, ArrowRight, MapPin, Users, Shield } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { CalendarDays, Search, Wrench, ArrowRight, MapPin, Users, Shield, LayoutDashboard } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const features = [
   {
@@ -21,10 +22,20 @@ const features = [
 ];
 
 export const Landing: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
+
   useEffect(() => {
     // Wake up the backend on Render so that the server is ready by the time the user reaches the sign in page
     fetch(`${import.meta.env.VITE_API_URL}/health`).catch(() => {});
   }, []);
+
+  // If already authenticated, redirect straight to the app
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate('/app/activity', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   return (
     <div className="landing-shell">
@@ -42,7 +53,7 @@ export const Landing: React.FC = () => {
             </span>
           </Link>
           <Link
-            to="/signin"
+            to={isAuthenticated ? '/app/activity' : '/signin'}
             style={{
               background: 'rgba(255,255,255,0.15)',
               border: '1.5px solid rgba(255,255,255,0.35)',
@@ -51,13 +62,15 @@ export const Landing: React.FC = () => {
               borderRadius: 'var(--r-lg)',
               fontSize: 14,
               fontWeight: 700,
-              display: 'inline-block',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
               transition: 'background .2s',
             }}
             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}
           >
-            Sign In
+            {isAuthenticated ? <><LayoutDashboard size={15} /> Dashboard</> : 'Sign In'}
           </Link>
         </div>
 
@@ -77,9 +90,9 @@ export const Landing: React.FC = () => {
               Locora brings neighbors together. Find local events, recover lost items, and share service visits — all within your street.
             </p>
             <div className="landing-cta-row">
-              <Link to="/signin" className="landing-cta-primary">
-                Get Started
-                <ArrowRight size={17} />
+              <Link to={isAuthenticated ? '/app/activity' : '/signin'} className="landing-cta-primary">
+                {isAuthenticated ? 'Go to Dashboard' : 'Get Started'}
+                {isAuthenticated ? <LayoutDashboard size={17} /> : <ArrowRight size={17} />}
               </Link>
               <a href="#features" className="landing-cta-secondary">
                 See Features
@@ -143,8 +156,9 @@ export const Landing: React.FC = () => {
           <p style={{ color: 'var(--text-muted)', fontSize: 15, marginBottom: 28 }}>
             Join Locora in seconds — no password required, just your email address.
           </p>
-          <Link to="/signin" className="btn btn-primary btn-lg">
-            Join Now — It's Free <ArrowRight size={17} />
+          <Link to={isAuthenticated ? '/app/activity' : '/signin'} className="btn btn-primary btn-lg">
+            {isAuthenticated ? 'Open Dashboard' : "Join Now — It's Free"}
+            {isAuthenticated ? <LayoutDashboard size={17} /> : <ArrowRight size={17} />}
           </Link>
         </div>
       </section>
@@ -158,7 +172,9 @@ export const Landing: React.FC = () => {
           <strong style={{ color: 'var(--text-h)', fontWeight: 800, letterSpacing: '-0.03em' }}>locora</strong>
         </div>
         <p>© {new Date().getFullYear()} Locora · The Social Layer of Every Neighborhood</p>
-        <Link to="/signin" style={{ color: 'var(--accent-dark)', fontWeight: 600 }}>Sign In →</Link>
+        <Link to={isAuthenticated ? '/app/activity' : '/signin'} style={{ color: 'var(--accent-dark)', fontWeight: 600 }}>
+          {isAuthenticated ? 'Dashboard →' : 'Sign In →'}
+        </Link>
       </footer>
 
       <style>{`
