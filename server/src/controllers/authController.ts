@@ -3,8 +3,6 @@ import User from '../models/User';
 import Session from '../models/Session';
 import { AuthRequest } from '../middleware/auth';
 import { sendSuccess, sendError } from '../utils/apiResponse';
-import { generateAndStoreOtp, validateOtp } from '../services/otpService';
-import { sendOtpEmail } from '../services/emailService';
 import {
   createAccessToken,
   createRefreshToken,
@@ -14,52 +12,86 @@ import {
   REFRESH_COOKIE_OPTIONS,
 } from '../services/tokenService';
 
-// ── OTP Request ────────────────────────────────────────────────────────────
-export const requestOtp = async (req: Request, res: Response): Promise<void> => {
+// ── Sign Up ─────────────────────────────────────────────────────────────────
+export const signup = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email } = req.body;
+    const { name, email, password } = req.body;
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!name || !email || !password) {
+      sendError(res, 'Name, email, and password are required.', 400);
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       sendError(res, 'Please provide a valid email address.', 400);
       return;
     }
 
-    const otp = await generateAndStoreOtp(email.toLowerCase());
-    // Trigger email send in background so the API responds instantly
-    sendOtpEmail(email.toLowerCase(), otp).catch((err) => {
-      console.error('Background SMTP send error:', err);
-    });
-
-    sendSuccess(res, null, 'OTP sent to your email. Check your inbox.');
-  } catch (error: unknown) {
-    sendError(res, (error as Error).message || 'Failed to send OTP.', 500);
-  }
-};
-
-// ── OTP Verify ─────────────────────────────────────────────────────────────
-export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, otp } = req.body;
-
-    if (!email || !otp) {
-      sendError(res, 'Email and OTP are required.', 400);
+    if (password.length < 6) {
+      sendError(res, 'Password must be at least 6 characters.', 400);
       return;
     }
 
-    await validateOtp(email.toLowerCase(), otp.toString().trim());
-
-    // Find or create user
-    let user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      const name = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-      user = await User.create({ email: email.toLowerCase(), name });
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) {
+      sendError(res, 'An account with this email already exists.', 409);
+      return;
     }
 
-    // Issue access + refresh JWTs
+    const user = await User.create({
+      name: name.trim(),
+      email: email.toLowerCase(),
+      password,
+    });
+
     const accessToken = createAccessToken(user.id, user.email);
     const { refreshToken, expiresAt } = await createRefreshToken(user.id, req);
 
-    // Store refresh token in HttpOnly cookie
+    res.cookie('refreshToken', refreshToken, { ...REFRESH_COOKIE_OPTIONS, expires: expiresAt });
+
+    sendSuccess(res, {
+      accessToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+        address: user.address,
+        bio: user.bio,
+        department: user.department,
+      },
+    }, 'Account created successfully.', 201);
+  } catch (error: unknown) {
+    sendError(res, (error as Error).message || 'Sign up failed.', 500);
+  }
+};
+
+// ── Sign In ──────────────────────────────────────────────────────────────────
+export const signin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      sendError(res, 'Email and password are required.', 400);
+      return;
+    }
+
+    // Explicitly select password since it's marked select: false
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    if (!user) {
+      sendError(res, 'Invalid email or password.', 401);
+      return;
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      sendError(res, 'Invalid email or password.', 401);
+      return;
+    }
+
+    const accessToken = createAccessToken(user.id, user.email);
+    const { refreshToken, expiresAt } = await createRefreshToken(user.id, req);
+
     res.cookie('refreshToken', refreshToken, { ...REFRESH_COOKIE_OPTIONS, expires: expiresAt });
 
     sendSuccess(res, {
@@ -75,7 +107,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       },
     }, 'Signed in successfully.');
   } catch (error: unknown) {
-    sendError(res, (error as Error).message || 'OTP verification failed.', 400);
+    sendError(res, (error as Error).message || 'Sign in failed.', 500);
   }
 };
 
@@ -104,7 +136,6 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 
     const accessToken = createAccessToken(result.userId, user.email);
 
-    // Set newly rotated refresh token in cookie
     res.cookie('refreshToken', result.refreshToken, {
       ...REFRESH_COOKIE_OPTIONS,
       expires: result.expiresAt,
@@ -176,7 +207,6 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
     sendError(res, (error as Error).message, 500);
   }
 };
-
 
 // ── Update Me ────────────────────────────────────────────────────────────────
 export const updateMe = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -263,9 +293,8 @@ export const updateLocation = async (req: AuthRequest, res: Response): Promise<v
     if (hasPrev) {
       const lat2 = user.latitude!;
       const lon2 = user.longitude!;
-      
-      // Calculate Haversine distance
-      const R = 6371; // Radius of Earth in km
+
+      const R = 6371;
       const dLat = ((lat2 - lat1) * Math.PI) / 180;
       const dLon = ((lon2 - lon1) * Math.PI) / 180;
       const a =
@@ -277,7 +306,6 @@ export const updateLocation = async (req: AuthRequest, res: Response): Promise<v
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       const distance = R * c;
 
-      // Update only if distance is >= 1 km
       if (distance < 1.0) {
         shouldUpdate = false;
       }
@@ -288,7 +316,7 @@ export const updateLocation = async (req: AuthRequest, res: Response): Promise<v
       user.longitude = lon1;
       user.location = {
         type: 'Point',
-        coordinates: [lon1, lat1], // [longitude, latitude]
+        coordinates: [lon1, lat1],
       };
       user.lastLocationUpdatedAt = new Date();
       await user.save();
@@ -300,4 +328,3 @@ export const updateLocation = async (req: AuthRequest, res: Response): Promise<v
     sendError(res, (error as Error).message, 500);
   }
 };
-

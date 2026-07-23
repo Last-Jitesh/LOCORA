@@ -1,0 +1,195 @@
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import toast from 'react-hot-toast';
+import { Mail, Lock, User as UserIcon, Loader2, MapPin, ArrowRight, Users, Sparkles, Eye, EyeOff } from 'lucide-react';
+import { authApi } from '../../api/auth';
+import { useAuth } from '../../context/AuthContext';
+
+const schema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  confirmPassword: z.string(),
+}).refine(d => d.password === d.confirmPassword, {
+  message: "Passwords don't match",
+  path: ['confirmPassword'],
+});
+type FormValues = z.infer<typeof schema>;
+
+export const SignUp: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+  });
+
+  const onSubmit = async (data: FormValues) => {
+    setLoading(true);
+    try {
+      const res = await authApi.signup(data.name, data.email, data.password);
+      if (res.data.success && res.data.data) {
+        login(res.data.data.user, res.data.data.accessToken);
+        toast.success(`Welcome to Locora, ${res.data.data.user.name}!`);
+        navigate('/app/activity', { replace: true });
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Sign up failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-shell">
+      {/* Left panel */}
+      <div className="auth-panel-left">
+        <div className="auth-panel-left-content fade-up">
+          <div style={{ display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' }}>
+            {[
+              { icon: Users, label: 'Join the community' },
+              { icon: Sparkles, label: 'Free forever' },
+            ].map(({ icon: Ic, label }) => (
+              <div key={label} style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)',
+                padding: '7px 14px', borderRadius: 'var(--r-full)',
+                fontSize: 12, fontWeight: 700, color: '#fff',
+              }}>
+                <Ic size={13} /> {label}
+              </div>
+            ))}
+          </div>
+          <h2>Connect with your<br />neighbourhood today.</h2>
+          <p>Create your free account and start discovering local activities, services, and the people around you.</p>
+        </div>
+      </div>
+
+      {/* Right panel */}
+      <div className="auth-panel-right">
+        <div className="auth-logo">
+          <div className="auth-logo-mark">
+            <MapPin size={20} strokeWidth={2.4} />
+          </div>
+          <strong>locora</strong>
+        </div>
+
+        <h1 className="auth-title">Create account</h1>
+        <p className="auth-subtitle">Get started — it only takes a minute.</p>
+
+        <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Name */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="name">Full name</label>
+            <div style={{ position: 'relative' }}>
+              <UserIcon size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--n-400)' }} />
+              <input
+                id="name"
+                type="text"
+                placeholder="Jane Smith"
+                className={`form-control ${errors.name ? 'error' : ''}`}
+                style={{ paddingLeft: 42 }}
+                {...register('name')}
+              />
+            </div>
+            {errors.name && <span className="form-error">{errors.name.message}</span>}
+          </div>
+
+          {/* Email */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="email">Email address</label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--n-400)' }} />
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                className={`form-control ${errors.email ? 'error' : ''}`}
+                style={{ paddingLeft: 42 }}
+                {...register('email')}
+              />
+            </div>
+            {errors.email && <span className="form-error">{errors.email.message}</span>}
+          </div>
+
+          {/* Password */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="password">Password</label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--n-400)' }} />
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="At least 6 characters"
+                className={`form-control ${errors.password ? 'error' : ''}`}
+                style={{ paddingLeft: 42, paddingRight: 42 }}
+                {...register('password')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(p => !p)}
+                style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--n-400)', display: 'flex' }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {errors.password && <span className="form-error">{errors.password.message}</span>}
+          </div>
+
+          {/* Confirm Password */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="confirmPassword">Confirm password</label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--n-400)' }} />
+              <input
+                id="confirmPassword"
+                type={showConfirm ? 'text' : 'password'}
+                placeholder="Repeat your password"
+                className={`form-control ${errors.confirmPassword ? 'error' : ''}`}
+                style={{ paddingLeft: 42, paddingRight: 42 }}
+                {...register('confirmPassword')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm(p => !p)}
+                style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--n-400)', display: 'flex' }}
+              >
+                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {errors.confirmPassword && <span className="form-error">{errors.confirmPassword.message}</span>}
+          </div>
+
+          <button type="submit" disabled={loading} className="btn btn-primary btn-full" style={{ marginTop: 4, padding: '13px', fontSize: 15 }}>
+            {loading ? (
+              <><Loader2 size={18} className="animate-spin" /> Creating account…</>
+            ) : (
+              <>Create account <ArrowRight size={17} /></>
+            )}
+          </button>
+        </form>
+
+        <div style={{ marginTop: 24, textAlign: 'center', fontSize: 14, color: 'var(--text-muted)' }}>
+          Already have an account?{' '}
+          <Link to="/signin" style={{ fontWeight: 700, color: 'var(--accent-dark)' }}>
+            Sign in
+          </Link>
+        </div>
+
+        <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+          <Link to="/" style={{ fontSize: 13, color: 'var(--text-muted)', transition: 'color .2s' }}>
+            ← Back to home
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SignUp;

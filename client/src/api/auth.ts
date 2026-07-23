@@ -7,11 +7,11 @@ export interface AuthData {
 }
 
 export const authApi = {
-  requestOtp: (email: string) =>
-    api.post<{ success: boolean; message: string }>('/auth/otp/request', { email }),
+  signup: (name: string, email: string, password: string) =>
+    api.post<{ success: boolean; data: AuthData }>('/auth/signup', { name, email, password }),
 
-  verifyOtp: (email: string, otp: string) =>
-    api.post<{ success: boolean; data: AuthData }>('/auth/otp/verify', { email, otp }),
+  signin: (email: string, password: string) =>
+    api.post<{ success: boolean; data: AuthData }>('/auth/signin', { email, password }),
 
   /** Refresh access token — sends HttpOnly refreshToken cookie automatically */
   refresh: () =>

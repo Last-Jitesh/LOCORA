@@ -287,6 +287,21 @@ export const markInterested = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+export const getInterestedUsers = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const activity = await Activity.findById(req.params.id);
+    if (!activity) { sendError(res, 'Activity not found.', 404); return; }
+
+    const interests = await ActivityInterest.find({ activityId: req.params.id })
+      .populate('userId', 'name avatarUrl bio department')
+      .sort({ createdAt: -1 });
+
+    sendSuccess(res, interests.map(i => i.userId));
+  } catch (error: unknown) {
+    sendError(res, (error as Error).message, 500);
+  }
+};
+
 export const deleteActivity = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const activity = await Activity.findById(req.params.id);

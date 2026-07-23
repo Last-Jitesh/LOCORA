@@ -8,8 +8,4 @@ export const env = {
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET || 'locora_refresh_secret_CHANGE_ME',
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
   NODE_ENV: process.env.NODE_ENV || 'development',
-
-  // Email / OTP — powered by Brevo
-  EMAIL_FROM: process.env.EMAIL_FROM || '"Locora" <noreply@locora.app>',
-  BREVO_API_KEY: process.env.BREVO_API_KEY || '',
 };

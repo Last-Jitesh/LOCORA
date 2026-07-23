@@ -1,8 +1,7 @@
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
 import {
-  requestOtp,
-  verifyOtp,
+  signup,
+  signin,
   refresh,
   logout,
   logoutAll,
@@ -15,26 +14,9 @@ import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
-// Rate limiters
-const otpRequestLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 3,
-  keyGenerator: (req) => `${req.ip}:${req.body?.email || ''}`,
-  message: { success: false, message: 'Too many OTP requests. Please wait 10 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const otpVerifyLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 10,
-  keyGenerator: (req) => `${req.ip}:${req.body?.email || ''}`,
-  message: { success: false, message: 'Too many verification attempts. Please wait.' },
-});
-
-// OTP flow
-router.post('/otp/request', otpRequestLimiter, requestOtp);
-router.post('/otp/verify', otpVerifyLimiter, verifyOtp);
+// Password-based auth
+router.post('/signup', signup);
+router.post('/signin', signin);
 
 // JWT refresh token rotation
 router.post('/refresh', refresh);

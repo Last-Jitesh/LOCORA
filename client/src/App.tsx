@@ -5,8 +5,8 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { Landing } from './pages/Landing';
-import { SignInEmail } from './pages/auth/SignInEmail';
-import { SignInOtp } from './pages/auth/SignInOtp';
+import { SignIn } from './pages/auth/SignIn';
+import { SignUp } from './pages/auth/SignUp';
 import { Activities } from './pages/Activities';
 import { ActivityDetails } from './pages/ActivityDetails';
 import { ActivityForm } from './pages/ActivityForm';
@@ -35,8 +35,8 @@ export const App: React.FC = () => {
           <Routes>
             {/* Public Routes */}
             <Route path="/" element={<Landing />} />
-            <Route path="/signin" element={<SignInEmail />} />
-            <Route path="/signin/otp" element={<SignInOtp />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/signup" element={<SignUp />} />
 
             {/* Protected Core Layout routes */}
             <Route path="/app" element={<Layout />}>
