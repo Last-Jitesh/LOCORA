@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import toast from 'react-hot-toast';
 import { CircleUserRound, Laptop, Smartphone, Key, MapPin, Loader2 } from 'lucide-react';
-import { authApi } from '../../api/auth';
+import { authApi, SessionItem } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 
 const profileSchema = z.object({
@@ -15,13 +15,7 @@ const profileSchema = z.object({
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
-interface SessionItem {
-  _id: string;
-  userAgent?: string;
-  ipAddress?: string;
-  createdAt: string;
-  expiresAt: string;
-}
+
 
 export const Profile: React.FC = () => {
   const { user, login, logout, accessToken } = useAuth();

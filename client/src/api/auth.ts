@@ -6,6 +6,14 @@ export interface AuthData {
   user: User;
 }
 
+export interface SessionItem {
+  _id: string;
+  userAgent?: string;
+  ipAddress?: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export const authApi = {
   signup: (name: string, email: string, password: string) =>
     api.post<{ success: boolean; data: AuthData }>('/auth/signup', { name, email, password }),
@@ -26,4 +34,16 @@ export const authApi = {
 
   updateMe: (data: Partial<User>) =>
     api.patch<{ success: boolean; data: User }>('/auth/me', data),
+
+  /** Get all active sessions for the current user */
+  getSessions: () =>
+    api.get<{ success: boolean; data: SessionItem[] }>('/auth/sessions'),
+
+  /** Revoke a specific session by ID */
+  revokeSession: (sessionId: string) =>
+    api.delete<{ success: boolean }>(`/auth/sessions/${sessionId}`),
+
+  /** Logout from all devices */
+  logoutAll: () =>
+    api.post<{ success: boolean }>('/auth/logout-all'),
 };
