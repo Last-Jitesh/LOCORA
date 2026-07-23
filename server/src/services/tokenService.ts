@@ -32,10 +32,14 @@ export const verifyRefreshToken = (token: string): { id: string } | null => {
   }
 };
 
-/** Cookie options for the HttpOnly refresh token cookie */
+/** Cookie options for the HttpOnly refresh token cookie.
+ *  SameSite=None is required because the frontend (Vercel) and
+ *  backend (Render) are on different domains — browsers block
+ *  SameSite=Lax cookies on cross-site fetch/XHR requests.
+ *  SameSite=None MUST be paired with Secure=true (enforced below). */
 export const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: true,                  // required by browsers for SameSite=None
+  sameSite: 'none' as const,    // allow cross-site requests (Vercel → Render)
   maxAge: REFRESH_TOKEN_EXPIRY_MS,
 };

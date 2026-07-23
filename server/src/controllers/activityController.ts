@@ -68,49 +68,46 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
   try {
     const { lat, lng, radius, category, page = 1, limit = 20 } = req.query;
     const coords = parseCoords(lat, lng);
+
+    // Location is required — return empty list with a flag if coords are missing
+    if (!coords) {
+      sendSuccess(res, [], 'Location required to browse activities.', 200, {
+        page: Number(page), limit: Number(limit), total: 0, totalPages: 0,
+        requiresLocation: true,
+      });
+      return;
+    }
+
     const radiusMeters = kmToMeters(parseRadius(radius));
     const skip = (Number(page) - 1) * Number(limit);
 
     const query: Record<string, unknown> = {};
     if (category) query.category = category;
 
-    let activities: any[] = [];
-    if (coords) {
-      activities = await Activity.aggregate([
-        {
-          $geoNear: {
-            near: { type: 'Point', coordinates: [coords.lng, coords.lat] },
-            distanceField: 'distance',
-            maxDistance: radiusMeters,
-            spherical: true,
-            query,
-          },
+    const activities = await Activity.aggregate([
+      {
+        $geoNear: {
+          near: { type: 'Point', coordinates: [coords.lng, coords.lat] },
+          distanceField: 'distance',
+          maxDistance: radiusMeters,
+          spherical: true,
+          query,
         },
-        { $sort: { distance: 1, startTime: 1 } },
-        { $skip: skip },
-        { $limit: Number(limit) },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'createdBy',
-            foreignField: '_id',
-            as: 'createdBy',
-            pipeline: [{ $project: { name: 1, avatarUrl: 1, email: 1 } }],
-          },
+      },
+      { $sort: { distance: 1, startTime: 1 } },
+      { $skip: skip },
+      { $limit: Number(limit) },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'createdBy',
+          foreignField: '_id',
+          as: 'createdBy',
+          pipeline: [{ $project: { name: 1, avatarUrl: 1, email: 1 } }],
         },
-        { $unwind: '$createdBy' },
-      ]);
-    }
-
-    // Fallback: If no geo coordinates were passed OR if geo filter returned 0 items, fetch all activities
-    if (activities.length === 0) {
-      activities = await Activity.find(query)
-        .sort({ startTime: 1 })
-        .skip(skip)
-        .limit(Number(limit))
-        .populate('createdBy', 'name avatarUrl email')
-        .lean();
-    }
+      },
+      { $unwind: '$createdBy' },
+    ]);
 
     const total = await Activity.countDocuments(query);
     sendSuccess(res, activities, 'Activities fetched.', 200, {
@@ -121,6 +118,7 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
     sendError(res, (error as Error).message, 500);
   }
 };
+
 
 export const getActivityById = async (req: Request, res: Response): Promise<void> => {
   try {
