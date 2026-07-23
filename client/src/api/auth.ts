@@ -17,23 +17,13 @@ export const authApi = {
   refresh: () =>
     api.post<{ success: boolean; data: { accessToken: string; user: User } }>('/auth/refresh'),
 
-  /** Logout from current device — revokes the refreshToken cookie */
+  /** Logout — clears the HttpOnly refresh token cookie on the server */
   logout: () =>
     api.post<{ success: boolean }>('/auth/logout'),
-
-  /** Logout from all devices — revokes all refresh tokens for this user */
-  logoutAll: () =>
-    api.post<{ success: boolean }>('/auth/logout-all'),
 
   getMe: () =>
     api.get<{ success: boolean; data: User }>('/auth/me'),
 
   updateMe: (data: Partial<User>) =>
     api.patch<{ success: boolean; data: User }>('/auth/me', data),
-
-  getSessions: () =>
-    api.get<{ success: boolean; data: any[] }>('/auth/sessions'),
-
-  revokeSession: (id: string) =>
-    api.delete<{ success: boolean }>(`/auth/sessions/${id}`),
 };

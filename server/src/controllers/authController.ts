@@ -1,14 +1,11 @@
 import { Request, Response } from 'express';
 import User from '../models/User';
-import Session from '../models/Session';
 import { AuthRequest } from '../middleware/auth';
 import { sendSuccess, sendError } from '../utils/apiResponse';
 import {
   createAccessToken,
   createRefreshToken,
-  rotateRefreshToken,
-  revokeRefreshToken,
-  revokeAllUserTokens,
+  verifyRefreshToken,
   REFRESH_COOKIE_OPTIONS,
 } from '../services/tokenService';
 
@@ -45,9 +42,9 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
     });
 
     const accessToken = createAccessToken(user.id, user.email);
-    const { refreshToken, expiresAt } = await createRefreshToken(user.id, req);
+    const refreshToken = createRefreshToken(user.id);
 
-    res.cookie('refreshToken', refreshToken, { ...REFRESH_COOKIE_OPTIONS, expires: expiresAt });
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
     sendSuccess(res, {
       accessToken,
@@ -76,7 +73,6 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Explicitly select password since it's marked select: false
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     if (!user) {
       sendError(res, 'Invalid email or password.', 401);
@@ -90,9 +86,9 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
     }
 
     const accessToken = createAccessToken(user.id, user.email);
-    const { refreshToken, expiresAt } = await createRefreshToken(user.id, req);
+    const refreshToken = createRefreshToken(user.id);
 
-    res.cookie('refreshToken', refreshToken, { ...REFRESH_COOKIE_OPTIONS, expires: expiresAt });
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
 
     sendSuccess(res, {
       accessToken,
@@ -120,26 +116,24 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const result = await rotateRefreshToken(incomingToken, req);
-    if (!result) {
+    const payload = verifyRefreshToken(incomingToken);
+    if (!payload) {
       res.clearCookie('refreshToken');
       sendError(res, 'Refresh token expired or invalid. Please sign in again.', 401);
       return;
     }
 
-    const user = await User.findById(result.userId).select('-__v');
+    const user = await User.findById(payload.id).select('-__v');
     if (!user) {
       res.clearCookie('refreshToken');
       sendError(res, 'User not found.', 401);
       return;
     }
 
-    const accessToken = createAccessToken(result.userId, user.email);
-
-    res.cookie('refreshToken', result.refreshToken, {
-      ...REFRESH_COOKIE_OPTIONS,
-      expires: result.expiresAt,
-    });
+    const accessToken = createAccessToken(user.id, user.email);
+    // Issue a fresh refresh token (sliding expiry)
+    const newRefreshToken = createRefreshToken(user.id);
+    res.cookie('refreshToken', newRefreshToken, REFRESH_COOKIE_OPTIONS);
 
     sendSuccess(res, {
       accessToken,
@@ -159,29 +153,9 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 };
 
 // ── Logout ──────────────────────────────────────────────────────────────────
-export const logout = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const token = req.cookies?.refreshToken;
-    if (token) {
-      await revokeRefreshToken(token);
-    }
-    res.clearCookie('refreshToken');
-    sendSuccess(res, null, 'Signed out successfully.');
-  } catch {
-    res.clearCookie('refreshToken');
-    sendSuccess(res, null, 'Signed out.');
-  }
-};
-
-// ── Logout From All Devices ──────────────────────────────────────────────────
-export const logoutAll = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    await revokeAllUserTokens(req.user!.id);
-    res.clearCookie('refreshToken');
-    sendSuccess(res, null, 'Signed out from all devices.');
-  } catch (error: unknown) {
-    sendError(res, (error as Error).message, 500);
-  }
+export const logout = async (_req: Request, res: Response): Promise<void> => {
+  res.clearCookie('refreshToken');
+  sendSuccess(res, null, 'Signed out successfully.');
 };
 
 // ── Get Me ──────────────────────────────────────────────────────────────────
@@ -189,7 +163,15 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const user = await User.findById(req.user!.id).select('-__v');
     if (!user) { sendError(res, 'User not found.', 404); return; }
-    sendSuccess(res, { id: user._id, name: user.name, email: user.email, avatarUrl: user.avatarUrl, address: user.address });
+    sendSuccess(res, {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      address: user.address,
+      bio: user.bio,
+      department: user.department,
+    });
   } catch (error: unknown) {
     sendError(res, (error as Error).message, 500);
   }
@@ -219,7 +201,7 @@ export const updateMe = async (req: AuthRequest, res: Response): Promise<void> =
         ...(address !== undefined && { address }),
         ...(avatarUrl !== undefined && { avatarUrl }),
         ...(bio !== undefined && { bio }),
-        ...(department !== undefined && { department })
+        ...(department !== undefined && { department }),
       },
       { new: true, runValidators: true }
     ).select('-__v');
@@ -233,33 +215,6 @@ export const updateMe = async (req: AuthRequest, res: Response): Promise<void> =
       bio: user.bio,
       department: user.department,
     });
-  } catch (error: unknown) {
-    sendError(res, (error as Error).message, 500);
-  }
-};
-
-// ── List Sessions ────────────────────────────────────────────────────────────
-export const getSessions = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const sessions = await Session.find({
-      userId: req.user!.id,
-      expiresAt: { $gt: new Date() },
-    }).select('userAgent ipAddress createdAt expiresAt').sort({ createdAt: -1 });
-
-    sendSuccess(res, sessions);
-  } catch (error: unknown) {
-    sendError(res, (error as Error).message, 500);
-  }
-};
-
-// ── Revoke Session ───────────────────────────────────────────────────────────
-export const revokeSession = async (req: AuthRequest, res: Response): Promise<void> => {
-  try {
-    const session = await Session.findOne({ _id: req.params.id, userId: req.user!.id });
-    if (!session) { sendError(res, 'Session not found.', 404); return; }
-
-    await Session.deleteOne({ _id: session._id });
-    sendSuccess(res, null, 'Session revoked.');
   } catch (error: unknown) {
     sendError(res, (error as Error).message, 500);
   }
@@ -282,10 +237,7 @@ export const updateLocation = async (req: AuthRequest, res: Response): Promise<v
     }
 
     const user = await User.findById(req.user!.id);
-    if (!user) {
-      sendError(res, 'User not found.', 404);
-      return;
-    }
+    if (!user) { sendError(res, 'User not found.', 404); return; }
 
     const hasPrev = user.latitude !== undefined && user.longitude !== undefined;
     let shouldUpdate = true;
@@ -293,7 +245,6 @@ export const updateLocation = async (req: AuthRequest, res: Response): Promise<v
     if (hasPrev) {
       const lat2 = user.latitude!;
       const lon2 = user.longitude!;
-
       const R = 6371;
       const dLat = ((lat2 - lat1) * Math.PI) / 180;
       const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -303,21 +254,14 @@ export const updateLocation = async (req: AuthRequest, res: Response): Promise<v
           Math.cos((lat2 * Math.PI) / 180) *
           Math.sin(dLon / 2) *
           Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = R * c;
-
-      if (distance < 1.0) {
-        shouldUpdate = false;
-      }
+      const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      if (distance < 1.0) shouldUpdate = false;
     }
 
     if (shouldUpdate) {
       user.latitude = lat1;
       user.longitude = lon1;
-      user.location = {
-        type: 'Point',
-        coordinates: [lon1, lat1],
-      };
+      user.location = { type: 'Point', coordinates: [lon1, lat1] };
       user.lastLocationUpdatedAt = new Date();
       await user.save();
       sendSuccess(res, { updated: true, distanceAlert: 'Location updated.' });
