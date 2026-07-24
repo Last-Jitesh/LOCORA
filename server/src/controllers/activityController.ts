@@ -71,10 +71,13 @@ export const getActivities = async (req: Request, res: Response): Promise<void> 
 
     // Location is required — return empty list with a flag if coords are missing
     if (!coords) {
-      sendSuccess(res, [], 'Location required to browse activities.', 200, {
-        page: Number(page), limit: Number(limit), total: 0, totalPages: 0,
-        requiresLocation: true,
-      });
+      sendSuccess(
+        res,
+        { items: [], requiresLocation: true },
+        'Location required to browse activities.',
+        200,
+        { page: Number(page), limit: Number(limit), total: 0, totalPages: 0 },
+      );
       return;
     }
 
