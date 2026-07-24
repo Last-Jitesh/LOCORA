@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 
+const isProd = env.NODE_ENV === 'production';
+
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '30d';
 const REFRESH_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
@@ -33,13 +35,12 @@ export const verifyRefreshToken = (token: string): { id: string } | null => {
 };
 
 /** Cookie options for the HttpOnly refresh token cookie.
- *  SameSite=None is required because the frontend (Vercel) and
- *  backend (Render) are on different domains — browsers block
- *  SameSite=Lax cookies on cross-site fetch/XHR requests.
- *  SameSite=None MUST be paired with Secure=true (enforced below). */
+ *  In production (Vercel → Render, cross-site): SameSite=None + Secure=true.
+ *  In development (localhost HTTP): Secure=false + SameSite=lax so the browser
+ *  actually sends the cookie (browsers drop Secure cookies on plain HTTP). */
 export const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true,                  // required by browsers for SameSite=None
-  sameSite: 'none' as const,    // allow cross-site requests (Vercel → Render)
+  secure: isProd,                                      // false on localhost
+  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',  // cross-site only in prod
   maxAge: REFRESH_TOKEN_EXPIRY_MS,
 };
