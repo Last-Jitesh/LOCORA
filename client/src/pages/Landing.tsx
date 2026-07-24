@@ -3,8 +3,8 @@ import { Link, Navigate } from 'react-router-dom';
 import { CalendarDays, Search, Wrench, ArrowRight, MapPin, Users, Shield, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-// Read the readable isLoggedIn cookie synchronously — no async needed
-const isLoggedInCookie = () =>
+// Read the isLoggedIn cookie — set by JS on the frontend domain after login
+const getLoggedInCookie = () =>
   document.cookie.split('; ').some(c => c.startsWith('isLoggedIn=true'));
 
 const features = [
@@ -30,7 +30,7 @@ export const Landing: React.FC = () => {
 
   // If cookie says logged-in, send them straight to the app immediately
   // (synchronous — no waiting for the async checkAuth to complete)
-  if (isLoggedInCookie()) {
+  if (getLoggedInCookie()) {
     return <Navigate to="/app/activity" replace />;
   }
 

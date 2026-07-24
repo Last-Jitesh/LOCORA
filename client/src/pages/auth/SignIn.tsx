@@ -8,8 +8,8 @@ import { Mail, Lock, Loader2, MapPin, ArrowRight, Users, Shield, Eye, EyeOff } f
 import { authApi } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
 
-// Synchronous cookie check — no async/useEffect needed
-const isLoggedInCookie = () =>
+// Read the isLoggedIn cookie — set by JS on the frontend domain after login
+const getLoggedInCookie = () =>
   document.cookie.split('; ').some(c => c.startsWith('isLoggedIn=true'));
 
 const schema = z.object({
@@ -26,7 +26,7 @@ export const SignIn: React.FC = () => {
   const { login } = useAuth();
 
   // If already logged in, skip this page entirely
-  if (isLoggedInCookie()) {
+  if (getLoggedInCookie()) {
     return <Navigate to="/app/activity" replace />;
   }
 

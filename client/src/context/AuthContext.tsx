@@ -16,11 +16,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Read a browser cookie by name (works because isLoggedIn is NOT httpOnly)
-const getCookie = (name: string): string | null => {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
+// ── Client-side isLoggedIn cookie (JS-readable, frontend domain) ──────────────
+// The HttpOnly refreshToken lives on the backend domain and can't be read by JS.
+// This cookie lives on the FRONTEND domain so we can synchronously check on load.
+const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
+
+const setLoggedInCookie = () => {
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `isLoggedIn=true; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax${secure}`;
 };
+
+const clearLoggedInCookie = () => {
+  document.cookie = 'isLoggedIn=; Path=/; Max-Age=0; SameSite=Lax';
+};
+
+const getLoggedInCookie = () =>
+  document.cookie.split('; ').some(c => c.startsWith('isLoggedIn=true'));
 
 const buildRefreshBase = () =>
   import.meta.env.VITE_API_URL
@@ -30,21 +41,23 @@ const buildRefreshBase = () =>
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessTokenState] = useState<string | null>(null);
-  // Start loading only if the isLoggedIn cookie exists — otherwise we KNOW
-  // the user is logged out and can render immediately without a network round-trip.
-  const [isLoading, setIsLoading] = useState(() => getCookie('isLoggedIn') === 'true');
+  // Start in loading state only if the isLoggedIn cookie exists — otherwise we
+  // know for sure the user is not logged in and can render immediately.
+  const [isLoading, setIsLoading] = useState(() => getLoggedInCookie());
   const hasChecked = useRef(false);
 
   const login = (userData: User, token: string) => {
     setUser(userData);
     setAccessTokenState(token);
     setAccessToken(token);
+    setLoggedInCookie(); // set on FRONTEND domain so JS can read it
   };
 
   const clearAuth = () => {
     setUser(null);
     setAccessTokenState(null);
     setAccessToken(null);
+    clearLoggedInCookie(); // clear from frontend domain
   };
 
   const logout = async () => {
@@ -59,8 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
-      // Raw axios — no interceptors — so a 401 here doesn't fire the logout
-      // callback and double-wipe state while we're still initialising.
+      // Raw axios (no interceptors) so a 401 here doesn't fire the logout
+      // callback and wipe state before we're done initialising.
       const { data } = await axios.post(
         `${buildRefreshBase()}/auth/refresh`,
         {},
@@ -82,9 +95,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     setLogoutCallback(clearAuth);
 
-    // Only attempt the network refresh if the isLoggedIn cookie is present.
-    // If it's absent the user is definitely not logged in — skip the request.
-    if (!hasChecked.current && getCookie('isLoggedIn') === 'true') {
+    // Only hit the network if the cookie says there might be a session.
+    if (!hasChecked.current && getLoggedInCookie()) {
       hasChecked.current = true;
       checkAuth();
     }
