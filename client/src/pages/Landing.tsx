@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Link, useNavigate, Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { CalendarDays, Search, Wrench, ArrowRight, MapPin, Users, Shield, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -27,7 +27,6 @@ const features = [
 
 export const Landing: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const navigate = useNavigate();
 
   // If cookie says logged-in, send them straight to the app immediately
   // (synchronous — no waiting for the async checkAuth to complete)
