@@ -3,7 +3,7 @@ import { env } from '../config/env';
 
 const isProd = env.NODE_ENV === 'production';
 
-const ACCESS_TOKEN_EXPIRY = '15m';
+const ACCESS_TOKEN_EXPIRY = '1d';
 const REFRESH_TOKEN_EXPIRY = '30d';
 const REFRESH_TOKEN_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -40,7 +40,18 @@ export const verifyRefreshToken = (token: string): { id: string } | null => {
  *  actually sends the cookie (browsers drop Secure cookies on plain HTTP). */
 export const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: isProd,                                      // false on localhost
-  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',  // cross-site only in prod
+  secure: isProd,
+  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
+  maxAge: REFRESH_TOKEN_EXPIRY_MS,
+};
+
+/** Cookie options for the readable `isLoggedIn=true` flag cookie.
+ *  NOT httpOnly — JavaScript must be able to read this to know whether to
+ *  wait for the silent refresh before deciding the user is unauthenticated.
+ *  Same expiry as the refresh token so they live and die together. */
+export const IS_LOGGED_IN_COOKIE_OPTIONS = {
+  httpOnly: false,                                     // JS-readable
+  secure: isProd,
+  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
   maxAge: REFRESH_TOKEN_EXPIRY_MS,
 };

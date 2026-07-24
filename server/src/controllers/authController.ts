@@ -7,6 +7,7 @@ import {
   createRefreshToken,
   verifyRefreshToken,
   REFRESH_COOKIE_OPTIONS,
+  IS_LOGGED_IN_COOKIE_OPTIONS,
 } from '../services/tokenService';
 
 // ── Sign Up ─────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
     const refreshToken = createRefreshToken(user.id);
 
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
+    res.cookie('isLoggedIn', 'true', IS_LOGGED_IN_COOKIE_OPTIONS);
 
     sendSuccess(res, {
       accessToken,
@@ -89,6 +91,7 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
     const refreshToken = createRefreshToken(user.id);
 
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
+    res.cookie('isLoggedIn', 'true', IS_LOGGED_IN_COOKIE_OPTIONS);
 
     sendSuccess(res, {
       accessToken,
@@ -119,6 +122,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     const payload = verifyRefreshToken(incomingToken);
     if (!payload) {
       res.clearCookie('refreshToken');
+      res.clearCookie('isLoggedIn');
       sendError(res, 'Refresh token expired or invalid. Please sign in again.', 401);
       return;
     }
@@ -126,6 +130,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     const user = await User.findById(payload.id).select('-__v');
     if (!user) {
       res.clearCookie('refreshToken');
+      res.clearCookie('isLoggedIn');
       sendError(res, 'User not found.', 401);
       return;
     }
@@ -134,6 +139,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     // Issue a fresh refresh token (sliding expiry)
     const newRefreshToken = createRefreshToken(user.id);
     res.cookie('refreshToken', newRefreshToken, REFRESH_COOKIE_OPTIONS);
+    res.cookie('isLoggedIn', 'true', IS_LOGGED_IN_COOKIE_OPTIONS);
 
     sendSuccess(res, {
       accessToken,
@@ -155,6 +161,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
 // ── Logout ──────────────────────────────────────────────────────────────────
 export const logout = async (_req: Request, res: Response): Promise<void> => {
   res.clearCookie('refreshToken');
+  res.clearCookie('isLoggedIn');
   sendSuccess(res, null, 'Signed out successfully.');
 };
 

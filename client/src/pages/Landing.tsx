@@ -1,7 +1,11 @@
 import React, { useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { CalendarDays, Search, Wrench, ArrowRight, MapPin, Users, Shield, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+
+// Read the readable isLoggedIn cookie synchronously — no async needed
+const isLoggedInCookie = () =>
+  document.cookie.split('; ').some(c => c.startsWith('isLoggedIn=true'));
 
 const features = [
   {
@@ -22,20 +26,19 @@ const features = [
 ];
 
 export const Landing: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  // If cookie says logged-in, send them straight to the app immediately
+  // (synchronous — no waiting for the async checkAuth to complete)
+  if (isLoggedInCookie()) {
+    return <Navigate to="/app/activity" replace />;
+  }
 
   useEffect(() => {
     // Wake up the backend on Render so that the server is ready by the time the user reaches the sign in page
     fetch(`${import.meta.env.VITE_API_URL}/health`).catch(() => {});
   }, []);
-
-  // If already authenticated, redirect straight to the app
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      navigate('/app/activity', { replace: true });
-    }
-  }, [isAuthenticated, isLoading, navigate]);
 
   return (
     <div className="landing-shell">

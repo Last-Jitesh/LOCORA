@@ -16,9 +16,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// A plain axios instance with NO interceptors — used only for the initial
-// silent refresh so the 401 interceptor in api/axios.ts doesn't trigger
-// a logout callback before we even know if we're logged in.
+// Read a browser cookie by name (works because isLoggedIn is NOT httpOnly)
+const getCookie = (name: string): string | null => {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
 const buildRefreshBase = () =>
   import.meta.env.VITE_API_URL
     ? `${import.meta.env.VITE_API_URL}/api`
@@ -27,8 +30,9 @@ const buildRefreshBase = () =>
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessTokenState] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  // prevent double-invocation of checkAuth in strict-mode
+  // Start loading only if the isLoggedIn cookie exists — otherwise we KNOW
+  // the user is logged out and can render immediately without a network round-trip.
+  const [isLoading, setIsLoading] = useState(() => getCookie('isLoggedIn') === 'true');
   const hasChecked = useRef(false);
 
   const login = (userData: User, token: string) => {
@@ -55,8 +59,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = async () => {
     try {
-      // Use a raw axios call (no interceptors) so a 401 here doesn't
-      // trigger the logout callback and wipe state before we're done initialising.
+      // Raw axios — no interceptors — so a 401 here doesn't fire the logout
+      // callback and double-wipe state while we're still initialising.
       const { data } = await axios.post(
         `${buildRefreshBase()}/auth/refresh`,
         {},
@@ -68,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearAuth();
       }
     } catch {
-      // Not authenticated — this is normal on first visit; just clear.
+      // No valid session — normal on first visit or after token expiry.
       clearAuth();
     } finally {
       setIsLoading(false);
@@ -78,7 +82,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     setLogoutCallback(clearAuth);
 
-    if (!hasChecked.current) {
+    // Only attempt the network refresh if the isLoggedIn cookie is present.
+    // If it's absent the user is definitely not logged in — skip the request.
+    if (!hasChecked.current && getCookie('isLoggedIn') === 'true') {
       hasChecked.current = true;
       checkAuth();
     }

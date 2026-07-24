@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, Link, useLocation, Navigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -7,6 +7,10 @@ import toast from 'react-hot-toast';
 import { Mail, Lock, Loader2, MapPin, ArrowRight, Users, Shield, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../../api/auth';
 import { useAuth } from '../../context/AuthContext';
+
+// Synchronous cookie check — no async/useEffect needed
+const isLoggedInCookie = () =>
+  document.cookie.split('; ').some(c => c.startsWith('isLoggedIn=true'));
 
 const schema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -19,14 +23,12 @@ export const SignIn: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login } = useAuth();
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      navigate('/app/activity', { replace: true });
-    }
-  }, [isAuthenticated, isLoading, navigate]);
+  // If already logged in, skip this page entirely
+  if (isLoggedInCookie()) {
+    return <Navigate to="/app/activity" replace />;
+  }
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
